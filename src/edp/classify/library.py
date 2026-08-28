@@ -23,6 +23,7 @@ import numpy as np
 from edp.config import ClassifyConfig
 
 from .embedder import Embedder
+from .faiss_index import FaissLibraryIndex
 
 TerminalTemplate = tuple[str, tuple[float, float], tuple[float, float]]  # name, tip_frac, body_frac
 
@@ -43,19 +44,21 @@ class ReferenceLibrary:
         if entries:
             self._matrix = np.stack([e.embedding for e in entries])
         else:
-            self._matrix = np.zeros((0, 384), dtype=np.float32)
+            self._matrix = np.zeros((0, 768), dtype=np.float32)
+        self._index = FaissLibraryIndex(self._matrix)
 
     def __len__(self) -> int:
         return len(self.entries)
 
     def match(self, embedding: np.ndarray) -> tuple[LibraryEntry | None, float]:
-        """Nearest-neighbour by cosine similarity (embeddings are
-        pre-normalised, so this is a dot product)."""
+        """Nearest-neighbour by cosine similarity, via the FAISS index
+        (embeddings are pre-normalised, so inner product = cosine sim)."""
         if len(self.entries) == 0:
             return None, 0.0
-        sims = self._matrix @ embedding
-        idx = int(np.argmax(sims))
-        return self.entries[idx], float(sims[idx])
+        indices, scores = self._index.search(embedding, k=1)
+        if len(indices) == 0:
+            return None, 0.0
+        return self.entries[int(indices[0])], float(scores[0])
 
     @classmethod
     def build(cls, reference_dir: str | Path, cfg: ClassifyConfig) -> "ReferenceLibrary":

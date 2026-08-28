@@ -62,14 +62,18 @@ def _pad_to_square(crop: np.ndarray, fill: int = 255) -> np.ndarray:
     return canvas
 
 
+_EMBEDDING_DIMS = {"dinov2_vits14": 384, "dinov2_vitb14": 768}
+
+
 class Embedder:
-    def __init__(self, model_name: str = "dinov2_vits14"):
+    def __init__(self, model_name: str = "dinov2_vitb14"):
         self.model_name = model_name
 
     def embed(self, crops: list[np.ndarray]) -> np.ndarray:
         """crops: list of HxWx3 uint8 RGB arrays. Returns (N, dim) float32."""
         if not crops:
-            return np.zeros((0, 384), dtype=np.float32)
+            dim = _EMBEDDING_DIMS.get(self.model_name, 768)
+            return np.zeros((0, dim), dtype=np.float32)
 
         processor, model, torch = _load_model(self.model_name)
         squared = [_pad_to_square(c) for c in crops]

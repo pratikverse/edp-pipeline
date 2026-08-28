@@ -59,11 +59,36 @@ def _strip_dots(binary: np.ndarray, dots: list[Point], radius_pad: int = 3) -> n
     return stripped
 
 
-def _density_map(binary: np.ndarray, window: int) -> np.ndarray:
+def _interest_points(binary: np.ndarray) -> np.ndarray:
+    """Skeleton pixels that are a branch (degree>=3) or an endpoint
+    (degree==1) — the raw "corner" signal everything else in this module
+    is built from."""
     skeleton = skeletonize(binary > 0).astype(np.uint8)
     degree = convolve(skeleton, _NEIGHBOR_KERNEL, mode="constant", cval=0) * skeleton
-    interest_points = ((degree >= 3) | (degree == 1)).astype(np.float32)
-    return cv2.boxFilter(interest_points, -1, (window, window), normalize=False)
+    return ((degree >= 3) | (degree == 1)).astype(np.uint8)
+
+
+def _density_map(interest_points: np.ndarray, window: int) -> np.ndarray:
+    return cv2.boxFilter(interest_points.astype(np.float32), -1, (window, window), normalize=False)
+
+
+def _corner_count(interest_points: np.ndarray, bbox: BBox) -> int:
+    """Number of *distinct* corners within a bbox, not raw interest-pixel
+    count: a single branch point can mark several adjacent skeleton
+    pixels, which would otherwise inflate one corner into several. This
+    is the direct fix for the dominant false-positive pattern — a plain
+    wire bend or T-junction has exactly one corner and was being kept as
+    a candidate by the windowed density check alone; a real symbol
+    (zigzag, circle-with-leads, box) clusters several. Confirmed on D4:
+    every rail-bend false positive audited had a single corner in its
+    final bbox, while every real symbol had 3 or more.
+    """
+    x0, y0, x1, y1 = bbox
+    region = interest_points[y0:y1, x0:x1]
+    if region.size == 0:
+        return 0
+    num_labels, _ = cv2.connectedComponents(region, connectivity=8)
+    return num_labels - 1  # exclude background label
 
 
 def find_candidates(

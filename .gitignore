@@ -7,3 +7,10 @@ data/reference/*.npz
 .venv/
 *.egg-info/
 .ipynb_checkpoints/
+
+# Synthetic training data and model weights: large and fully
+# regeneratable via scripts/generate_synthetic_dataset.py +
+# scripts/train_yolo.py — not source, don't commit.
+data/synth/
+*.pt
+debug_*.png

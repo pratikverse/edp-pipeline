@@ -26,11 +26,15 @@ class LocalizeConfig(BaseModel):
     density_merge_kernel: int = 9
     candidate_bbox_pad: int = 4
     candidate_merge_overlap: float = 0.5  # union candidates overlapping more than this (relative to the smaller box)
+    use_yolo: bool = True  # experimental branch: YOLO localizer instead of skeleton-density
+    yolo_weights: str = "outputs/yolo_runs/symbol_detector/weights/best.pt"
+    yolo_conf_threshold: float = 0.25
+    yolo_iou_threshold: float = 0.45
 
 
 class ClassifyConfig(BaseModel):
-    model: str = "dinov2_vits14"
-    embedding_dim: int = 384
+    model: str = "dinov2_vitb14"  # 768-dim (DINOv2-base); see docs/02
+    embedding_dim: int = 768
     rotations: list[int] = [0, 90, 180, 270]
     mirror: bool = True
     unknown_similarity_threshold: float = 0.62

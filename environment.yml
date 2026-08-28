@@ -31,3 +31,5 @@ dependencies:
       - uvicorn[standard]
       - python-multipart
       - transformers
+      - ultralytics
+      - faiss-cpu

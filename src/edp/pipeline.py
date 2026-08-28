@@ -14,6 +14,7 @@ from edp.classify.embedder import Embedder
 from edp.classify.library import ReferenceLibrary
 from edp.classify.match import classify_candidates
 from edp.config import Config
+from edp.detect.yolo_detect import detect_candidates
 from edp.localize.proposals import find_candidates
 from edp.preprocess.binarize import binarize, to_grayscale
 from edp.preprocess.deskew import deskew
@@ -64,7 +65,18 @@ def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResul
         dots = detect_junction_dots(binary, cfg.wires)
 
     with _stage("localize"):
-        candidates = find_candidates(binary, cfg.localize, text_tokens=tokens, dots=dots)
+        # Experimental branch: a YOLO detector (trained on synthetic
+        # composites of our KiCad reference symbols — see
+        # scripts/generate_synthetic_dataset.py) replaces the skeleton-
+        # density proposer. It only localizes; final type identity still
+        # comes from the DINOv2+FAISS match against the reference library
+        # in the classify stage below, unchanged (see detect/yolo_detect.py
+        # for why). Falls back to the density-based proposer if no trained
+        # weights exist yet, or if use_yolo is off.
+        if cfg.localize.use_yolo and Path(cfg.localize.yolo_weights).exists():
+            candidates = detect_candidates(img_rgb, cfg.localize)
+        else:
+            candidates = find_candidates(binary, cfg.localize, text_tokens=tokens, dots=dots)
 
     with _stage("classify"):
         library = ReferenceLibrary.build(cfg.classify.reference_dir, cfg.classify)
