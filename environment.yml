@@ -1,0 +1,33 @@
+name: edp
+# NOTE: torch/torchvision are installed via pip (see below), not conda.
+# Pulling them from the `pytorch` conda channel alongside conda-forge
+# caused an MKL/OpenMP DLL version mismatch on Windows (fbgemm.dll failed
+# to load, WinError 182). The official CPU wheels from
+# download.pytorch.org bundle a self-contained runtime and avoid this.
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - scipy
+  - opencv
+  - scikit-image
+  - networkx
+  - matplotlib
+  - lxml
+  - tesseract
+  - pillow
+  - pyyaml
+  - pytest
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cpu
+      - torch
+      - torchvision
+      - pydantic>=2
+      - pytesseract
+      - fastapi
+      - uvicorn[standard]
+      - python-multipart
+      - transformers

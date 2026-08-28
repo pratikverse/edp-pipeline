@@ -1,0 +1,107 @@
+"""Stage orchestration. This is the only file that knows the pipeline
+order (docs/07_project_layout.md) — every stage module takes typed
+objects in and returns typed objects out, with no knowledge of neighbours.
+"""
+from __future__ import annotations
+
+import time
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+from edp.classify.embedder import Embedder
+from edp.classify.library import ReferenceLibrary
+from edp.classify.match import classify_candidates
+from edp.config import Config
+from edp.localize.proposals import find_candidates
+from edp.preprocess.binarize import binarize, to_grayscale
+from edp.preprocess.deskew import deskew
+from edp.preprocess.layers import blue_layer_mask
+from edp.text.associate import associate_tokens
+from edp.text.ocr import run_ocr
+from edp.types import DrawingResult
+from edp.validate.checks import validate
+from edp.wires.junctions import detect_junction_dots
+from edp.wires.nets import build_nets
+from edp.wires.skeleton import skeletonize_wires, subtract_symbols
+
+
+def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResult, dict]:
+    """Runs the full pipeline on one drawing. Returns (result, timing)."""
+    cfg = cfg or Config.load()
+    image_path = Path(image_path)
+    timing: dict[str, float] = {}
+
+    def _stage(name):
+        return _Timer(name, timing)
+
+    img_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+    if img_bgr is None:
+        raise FileNotFoundError(f"could not read image: {image_path}")
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+    with _stage("preprocess"):
+        gray = to_grayscale(img_bgr)
+        binary = binarize(gray, cfg.preprocess)
+        binary, _skew_angle = deskew(binary, cfg.preprocess)
+        _blue_mask = blue_layer_mask(img_bgr) if cfg.preprocess.color_layer_split else None
+
+    with _stage("text_detect"):
+        # OCR runs before localization, not just before association: text
+        # glyphs have as many skeleton corners/endpoints as a real symbol,
+        # so localization needs the token boxes to exclude them (see
+        # localize/proposals.py). Association (id/value assignment) still
+        # happens after classification, once symbol bboxes exist.
+        tokens = run_ocr(gray, cfg.text)
+        # Junction dots also run early for the same reason: a dot is just
+        # as "busy" locally as a real symbol, and without excluding it a
+        # nearby symbol's candidate box absorbs the dot plus the wire stub
+        # leading to it — verified by inspecting D5's R1 crop, which was
+        # mostly two junction dots and wire, with only a sliver of the
+        # actual resistor. Detected once here, reused unchanged in the
+        # wires stage below.
+        dots = detect_junction_dots(binary, cfg.wires)
+
+    with _stage("localize"):
+        candidates = find_candidates(binary, cfg.localize, text_tokens=tokens, dots=dots)
+
+    with _stage("classify"):
+        library = ReferenceLibrary.build(cfg.classify.reference_dir, cfg.classify)
+        embedder = Embedder(cfg.classify.model)
+        symbols = classify_candidates(img_rgb, candidates, library, cfg.classify, embedder)
+
+    with _stage("text_associate"):
+        symbols = associate_tokens(symbols, tokens, cfg.text)
+
+    with _stage("wires"):
+        wire_mask = subtract_symbols(binary, symbols)
+        skeleton = skeletonize_wires(wire_mask)
+        nets = build_nets(skeleton, dots, symbols, cfg.wires)
+
+    with _stage("validate"):
+        validation = validate(symbols, nets, cfg.validation)
+
+    result = DrawingResult(
+        drawing_id=image_path.stem,
+        source_file=image_path.name,
+        symbols=symbols,
+        nets=nets,
+        validation=validation,
+        pipeline_version=cfg.output.pipeline_version,
+    )
+    return result, timing
+
+
+class _Timer:
+    def __init__(self, name: str, sink: dict):
+        self.name = name
+        self.sink = sink
+
+    def __enter__(self):
+        self._t0 = time.perf_counter()
+        return self
+
+    def __exit__(self, *exc):
+        self.sink[self.name] = round(time.perf_counter() - self._t0, 4)
+        return False

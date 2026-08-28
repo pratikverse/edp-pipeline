@@ -1,0 +1,54 @@
+# All pipeline thresholds live here, never inline in code (docs/07_project_layout.md).
+
+preprocess:
+  binarize_block_size: 31   # adaptive threshold neighbourhood, must be odd
+  binarize_c: 7              # adaptive threshold constant subtracted from mean
+  denoise: true
+  denoise_min_speckle_area: 2 # px; connected components smaller than this are dropped
+  deskew_max_angle_deg: 5
+  color_layer_split: true    # separate blue/black strokes where present (D5)
+
+localize:
+  min_component_area: 80
+  max_component_area: 40000
+  dash_close_kernel: 5        # morphological closing kernel size, dashed boundaries
+  thin_stroke_max_width: 4    # px; used only for the wire/symbol area-fraction kind hint
+  density_window: 25          # px; box-filter window for skeleton corner/endpoint density
+  density_threshold: 3        # min interest points in window to seed a symbol region
+  density_merge_kernel: 9     # px; dilation to merge a symbol's own fragmented density blobs
+  candidate_bbox_pad: 4       # px; padding added around each density-blob bbox
+  candidate_merge_overlap: 0.5 # union candidates overlapping more than this (of the smaller box)
+
+classify:
+  model: dinov2_vits14
+  embedding_dim: 384
+  rotations: [0, 90, 180, 270]
+  mirror: true
+  unknown_similarity_threshold: 0.62
+  reference_dir: data/reference
+
+text:
+  upscale_factor: 3
+  orientations: [0, 90, 270]
+  max_association_distance: 45
+  tesseract_config: "--psm 11"
+
+wires:
+  junction_dot_min_radius: 2
+  junction_dot_max_radius: 5
+  junction_dot_fill_ratio: 0.6    # min fraction of local disk that must be ink to count as a dot
+  terminal_snap_radius: 30       # isotropic fallback, only used when a terminal
+                                  # has no known pin direction (inferred terminals)
+  terminal_directional_reach: 45 # px; search distance along a KNOWN pin direction —
+                                  # can extend further than the isotropic radius since
+                                  # the search is restricted to a narrow cone, not a
+                                  # full circle, so false-positive risk stays low
+  terminal_snap_cone_deg: 70     # full angular width of the directional search cone
+  skeleton_prune_min_length: 3
+
+validation:
+  min_confidence: 0.5
+
+output:
+  outputs_dir: outputs
+  pipeline_version: "0.1.0"
