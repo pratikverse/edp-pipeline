@@ -12,5 +12,7 @@ data/reference/*.npz
 # regeneratable via scripts/generate_synthetic_dataset.py +
 # scripts/train_yolo.py — not source, don't commit.
 data/synth/
+data/synth_dense/
+data/synth*/
 *.pt
 debug_*.png

@@ -16,12 +16,18 @@ electrical-drawing-pipeline/
 │   │   ├── deskew.py
 │   │   └── layers.py         # colour-channel split (D5 blue/black), border strip
 │   ├── localize/
-│   │   ├── proposals.py      # connected components / contours
-│   │   └── morphology.py     # dashed-boundary closing, thin/thick separation
+│   │   ├── proposals.py      # skeleton branch/endpoint density candidate proposer
+│   │   └── morphology.py     # dashed-boundary closing (kind-hint only, see docs/01)
+│   ├── detect/                # [experimental branch] YOLO localizer
+│   │   └── yolo_detect.py    # drop-in replacement for localize/proposals.py;
+│   │                         # falls back to it automatically if no trained
+│   │                         # weights exist — see docs/02
 │   ├── classify/
-│   │   ├── embedder.py       # DINOv2 wrapper, batched
+│   │   ├── embedder.py       # DINOv2 wrapper (768-dim base model), batched
+│   │   ├── faiss_index.py    # [experimental] FAISS IndexFlatIP over the library
+│   │   ├── kicad_import.py   # .kicad_sym parser + rasterizer, terminal extraction
 │   │   ├── library.py        # reference library build/load, rotation augmentation
-│   │   └── match.py          # nearest-neighbour + unknown thresholding
+│   │   └── match.py          # nearest-neighbour (via FAISS) + unknown thresholding
 │   ├── text/
 │   │   ├── ocr.py            # upscaling, multi-orientation passes
 │   │   └── associate.py      # token → symbol proximity assignment
@@ -41,13 +47,20 @@ electrical-drawing-pipeline/
 │   └── cli.py
 ├── data/
 │   ├── raw/                  # D4.png, D5.png
-│   └── reference/            # reference symbol crops, one dir per class
-│       ├── resistor/
-│       ├── capacitor/
-│       └── ...
+│   ├── kicad_raw/            # fetched .kicad_sym source files
+│   ├── reference/            # rendered symbol PNGs + terminal templates,
+│   │                         # one dir per class — output of build_reference_from_kicad.py
+│   └── synth/                # [experimental, gitignored] generated YOLO training set —
+│                              # output of generate_synthetic_dataset.py, fully regeneratable
+├── scripts/
+│   ├── build_reference_from_kicad.py   # .kicad_sym -> data/reference/ (see docs/05)
+│   ├── generate_synthetic_dataset.py   # [experimental] composites reference symbols
+│   │                                   # into labeled YOLO training scenes (see docs/02)
+│   └── train_yolo.py                   # [experimental] trains the YOLO localizer
 ├── config/
 │   └── default.yaml
-├── outputs/                  # per-drawing JSON, graphs, debug overlays
+├── outputs/                  # per-drawing JSON, graphs, debug overlays;
+│                              # yolo_runs/ holds training checkpoints [experimental]
 ├── tests/
 ├── notebooks/                # exploration only, never imported by src
 └── docs/

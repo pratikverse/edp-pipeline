@@ -134,3 +134,58 @@ the graph topology is more robust than filtering bad edges out later.
 **Trade-off accepted:** one more intermediate representation to explain. Paid
 back immediately in stage 7, where "a net with fewer than two terminals" is a
 meaningful validation check that pairwise edges cannot express.
+
+## [Experimental branch] Symbol localization: YOLOv8 on synthetic data, replacing skeleton density
+**Context:** a manual accuracy audit (comparing pipeline output against D4/D5
+by eye, since no ground truth exists — see docs/05) found the skeleton-
+density localizer had a ~60% false-positive rate on D4, almost entirely wire
+bends and rail junctions misread as symbols, plus missed IC1 and one MOSFET
+entirely.
+**Chosen because:** a trained detector directly learns "does this look like a
+symbol," rather than approximating it through a hand-tuned corner-density
+heuristic. The original objection to a trained detector (docs/02, symbol
+localization entry above) was the lack of labeled bounding-box data — that
+objection is answered, not overridden, by generating the labels ourselves.
+**How the "no labeled training data" principle is preserved:**
+`scripts/generate_synthetic_dataset.py` composites the existing KiCad-
+rendered reference symbols (rotated, scaled to the real drawings' size
+distribution, with synthetic wire/text clutter) onto blank canvases and
+auto-generates the YOLO bounding-box labels from the placement it chose. No
+image was manually annotated; the "labels" are a byproduct of generation, not
+human judgment about what's in a drawing.
+**Alternative considered:** searching for an existing public schematic-symbol
+detection dataset.
+**Rejected because:** most available options are hand-drawn-diagram datasets
+(a different visual style from D4/D5's clean digital line art), and none
+would include the specific symbol variants this pipeline's own reference
+library already defines precisely.
+**Trade-off accepted:** YOLO's class head is trained purely on synthetic
+composites, so its own classification is not trusted as final — every
+YOLO-proposed box still goes through the existing DINOv2+FAISS match against
+the same KiCad reference library (classify/match.py, unchanged). YOLO's job
+is localization only.
+**Result (epoch 20/40, evaluated on D4/D5 directly, not just synthetic
+validation mAP):** D4 false-positive rate dropped from ~60% to 0% (11/11
+detections land on real components), and IC1 plus the previously-missed
+MOSFET were localized for the first time. D5 recall is weak (4 detections
+against ~25 real components) — traced to D5 packing symbols far more densely
+than the synthetic training canvases did; a denser-packing synthetic variant
+(`generate_synthetic_dataset.py --symbols-min 15 --symbols-max 30`) is
+prepared and validated visually, queued for the next retrain.
+
+## [Experimental branch] Classification retrieval: FAISS index, 768-dim DINOv2-base
+**Chosen because:** the reference-library design already commits to "add a
+class = drop in crops and rebuild the index" (docs/06, docs/07) — at the
+current library size (~140 vectors) a brute-force `matrix @ query` scan is
+already sub-millisecond, so FAISS buys nothing today, but it buys the same
+interface at a size that would matter later (many classes x rotation/mirror
+variants x multiple exemplars), for free. Switching `IndexFlatIP` to an
+approximate index (IVF/HNSW) if the library ever outgrows exact search is a
+one-line change under this design, not a rewrite.
+**DINOv2-base (768-dim) over DINOv2-small (384-dim):** a larger embedding
+model, on the same reasoning as the original DINOv2-over-CLIP choice —
+better separation of visually similar technical line-art symbols, at
+roughly double the compute cost, which is affordable at this library size.
+**Trade-off accepted:** larger model means slower classification per crop
+(measured: DINOv2-base roughly 2-3x DINOv2-small's per-image cost on CPU).
+Acceptable given classification isn't the pipeline's throughput bottleneck.

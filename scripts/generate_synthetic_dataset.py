@@ -14,6 +14,9 @@ annotated, so this does not reintroduce hand-labeled training data.
 
 Usage:
     python scripts/generate_synthetic_dataset.py --n-train 800 --n-val 100
+    # denser packing, to better match a tightly-laid-out drawing like D5:
+    python scripts/generate_synthetic_dataset.py --out-dir data/synth_dense \\
+        --symbols-min 15 --symbols-max 30 --canvas-min 480 --canvas-max 700
 """
 from __future__ import annotations
 
@@ -30,16 +33,21 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 REFERENCE_DIR = REPO_ROOT / "data" / "reference"
-OUT_DIR = REPO_ROOT / "data" / "synth"
 
 # Real symbols in D4/D5 run roughly 25-90px on a side; our KiCad renders are
 # 20px/mm and much larger (up to 430px) since that scale was chosen for
 # clean DINOv2 embedding, not matched to real drawing scale. Composing at
 # the real distribution is what makes the trained detector transfer.
 TARGET_SIZE_RANGE = (24, 85)
-CANVAS_SIZE_RANGE = (500, 900)
-SYMBOLS_PER_CANVAS_RANGE = (6, 16)
 ROTATIONS = [0, 90, 180, 270]
+
+
+@dataclass
+class GenConfig:
+    out_dir: Path
+    canvas_size_range: tuple[int, int] = (500, 900)
+    symbols_per_canvas_range: tuple[int, int] = (6, 16)
+    placement_attempts: int = 15
 
 
 @dataclass
@@ -107,15 +115,15 @@ def _iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float:
     return inter / union if union > 0 else 0.0
 
 
-def generate_one(sources: list[SourceSymbol], class_names: list[str], rng: random.Random):
-    h = rng.randint(*CANVAS_SIZE_RANGE)
-    w = rng.randint(*CANVAS_SIZE_RANGE)
+def generate_one(sources: list[SourceSymbol], class_names: list[str], rng: random.Random, gen_cfg: GenConfig):
+    h = rng.randint(*gen_cfg.canvas_size_range)
+    w = rng.randint(*gen_cfg.canvas_size_range)
     canvas = np.full((h, w, 3), 255, dtype=np.uint8)
 
     # Border rail, like the frame most real schematics are drawn inside.
     cv2.rectangle(canvas, (5, 5), (w - 5, h - 5), (0, 0, 0), 1)
 
-    n_symbols = rng.randint(*SYMBOLS_PER_CANVAS_RANGE)
+    n_symbols = rng.randint(*gen_cfg.symbols_per_canvas_range)
     placed_boxes: list[tuple[int, int, int, int]] = []
     placed_centers: list[tuple[int, int]] = []
     labels: list[tuple[int, float, float, float, float]] = []  # class_id, xc, yc, bw, bh (normalized)
@@ -129,7 +137,7 @@ def generate_one(sources: list[SourceSymbol], class_names: list[str], rng: rando
             continue
 
         placed = False
-        for _attempt in range(15):
+        for _attempt in range(gen_cfg.placement_attempts):
             x0 = rng.randint(15, w - sw - 15)
             y0 = rng.randint(15, h - sh - 15)
             box = (x0, y0, x0 + sw, y0 + sh)
@@ -163,15 +171,15 @@ def generate_one(sources: list[SourceSymbol], class_names: list[str], rng: rando
     return canvas, labels
 
 
-def write_split(sources, class_names, n_images: int, split: str, seed: int) -> None:
+def write_split(sources, class_names, n_images: int, split: str, seed: int, gen_cfg: GenConfig) -> None:
     rng = random.Random(seed)
-    img_dir = OUT_DIR / "images" / split
-    lbl_dir = OUT_DIR / "labels" / split
+    img_dir = gen_cfg.out_dir / "images" / split
+    lbl_dir = gen_cfg.out_dir / "labels" / split
     img_dir.mkdir(parents=True, exist_ok=True)
     lbl_dir.mkdir(parents=True, exist_ok=True)
 
     for i in range(n_images):
-        canvas, labels = generate_one(sources, class_names, rng)
+        canvas, labels = generate_one(sources, class_names, rng, gen_cfg)
         stem = f"{split}_{i:05d}"
         cv2.imwrite(str(img_dir / f"{stem}.png"), canvas)
         with open(lbl_dir / f"{stem}.txt", "w", encoding="utf-8") as f:
@@ -180,10 +188,10 @@ def write_split(sources, class_names, n_images: int, split: str, seed: int) -> N
     print(f"[synth] wrote {n_images} images to {img_dir}")
 
 
-def write_data_yaml(class_names: list[str]) -> Path:
-    yaml_path = OUT_DIR / "data.yaml"
+def write_data_yaml(class_names: list[str], gen_cfg: GenConfig) -> Path:
+    yaml_path = gen_cfg.out_dir / "data.yaml"
     lines = [
-        f"path: {OUT_DIR.as_posix()}",
+        f"path: {gen_cfg.out_dir.as_posix()}",
         "train: images/train",
         "val: images/val",
         f"names: {class_names}",
@@ -197,14 +205,27 @@ def main() -> None:
     parser.add_argument("--n-train", type=int, default=800)
     parser.add_argument("--n-val", type=int, default=100)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--out-dir", type=str, default="data/synth")
+    parser.add_argument("--symbols-min", type=int, default=6)
+    parser.add_argument("--symbols-max", type=int, default=16)
+    parser.add_argument("--canvas-min", type=int, default=500)
+    parser.add_argument("--canvas-max", type=int, default=900)
     args = parser.parse_args()
+
+    gen_cfg = GenConfig(
+        out_dir=REPO_ROOT / args.out_dir,
+        canvas_size_range=(args.canvas_min, args.canvas_max),
+        symbols_per_canvas_range=(args.symbols_min, args.symbols_max),
+    )
 
     sources, class_names = load_sources()
     print(f"[synth] {len(sources)} source symbol images across {len(class_names)} classes: {class_names}")
+    print(f"[synth] out_dir={gen_cfg.out_dir} symbols_per_canvas={gen_cfg.symbols_per_canvas_range} "
+          f"canvas_size={gen_cfg.canvas_size_range}")
 
-    write_split(sources, class_names, args.n_train, "train", seed=args.seed)
-    write_split(sources, class_names, args.n_val, "val", seed=args.seed + 1)
-    yaml_path = write_data_yaml(class_names)
+    write_split(sources, class_names, args.n_train, "train", seed=args.seed, gen_cfg=gen_cfg)
+    write_split(sources, class_names, args.n_val, "val", seed=args.seed + 1, gen_cfg=gen_cfg)
+    yaml_path = write_data_yaml(class_names, gen_cfg)
     print(f"[synth] data.yaml -> {yaml_path}")
 
 
