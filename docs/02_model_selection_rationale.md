@@ -164,14 +164,38 @@ composites, so its own classification is not trusted as final — every
 YOLO-proposed box still goes through the existing DINOv2+FAISS match against
 the same KiCad reference library (classify/match.py, unchanged). YOLO's job
 is localization only.
-**Result (epoch 20/40, evaluated on D4/D5 directly, not just synthetic
-validation mAP):** D4 false-positive rate dropped from ~60% to 0% (11/11
-detections land on real components), and IC1 plus the previously-missed
-MOSFET were localized for the first time. D5 recall is weak (4 detections
-against ~25 real components) — traced to D5 packing symbols far more densely
-than the synthetic training canvases did; a denser-packing synthetic variant
-(`generate_synthetic_dataset.py --symbols-min 15 --symbols-max 30`) is
-prepared and validated visually, queued for the next retrain.
+**Result, training complete (40/40 epochs, 3.49h CPU, final synthetic-val
+mAP50=0.876/mAP50-95=0.768; evaluated on D4/D5 directly throughout, not
+just synthetic validation mAP):**
+- **D4:** false-positive rate dropped from ~60% to ~0% across every
+  checkpoint tested (11/11 at epoch 20, 19/19 at epoch 40 land on real
+  components). IC1, the MOSFET, and ZD1 — all missed entirely by the
+  density-based localizer — are now localized, and ZD1's type is now also
+  correctly matched (Zener). Only C1 and BATT-13V remain unlocalized.
+- **D5:** recall was the weak point early (4/~25 at epoch 20, default
+  conf=0.25) — two separable causes, both addressed: (a) the confidence
+  threshold was cutting off real detections sitting in the 0.1-0.25 range
+  (verified directly by sweeping conf 0.25/0.1/0.05 against the raw
+  detector — confirmed as recall bottleneck, not precision protection;
+  default lowered to 0.12), and (b) D5 packs symbols more densely than the
+  synthetic canvases did. After (a) alone: 15/~25 at epoch 22. After full
+  training at the lower threshold: 28 detections, now covering nearly the
+  entire drawing (some may be duplicates/overlaps rather than pure false
+  positives — not yet disambiguated).
+- **Per-class detector quality (final synthetic val mAP50):** most classes
+  are strong (>0.93: Antenna, Battery, Capacitor(s), Crystal, Fuse,
+  Ground, LED, MOSFET_N, Transformer, Resistor, Switch, Inductor). Weak:
+  BJT_NPN (0.51), BJT_PNP (0.60), Diode (0.66), Zener (0.45) — exactly the
+  sibling-pairs that differ by one small visual detail (arrow direction
+  for NPN/PNP, a small kink for Diode/Zener), matching the confusion
+  already observed in manual audits of the classify stage. This reads as
+  a genuine fine-grained-discrimination limit at this training scale,
+  not a bug.
+- **Queued, not yet done:** a denser-packing synthetic variant
+  (`generate_synthetic_dataset.py --symbols-min 15 --symbols-max 30`) is
+  generated and visually validated but not yet used for a retrain — the
+  threshold fix already closed most of the D5 recall gap it was meant to
+  address, so its marginal value is unconfirmed.
 
 ## [Experimental branch] Classification retrieval: FAISS index, 768-dim DINOv2-base
 **Chosen because:** the reference-library design already commits to "add a
