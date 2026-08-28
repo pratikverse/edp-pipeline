@@ -10,6 +10,16 @@ Evaluation rewards a **generic, scalable, well-justified** pipeline over raw acc
 Every stage below is chosen to (a) require no/minimal labeled training data, and
 (b) generalize to new symbol types by adding reference data, not retraining models.
 
+> **Experimental branch (`reduce-false-positives`) note:** stages 2-3 below
+> describe the classical density-based localizer, which is what `main` runs.
+> On this branch, stage 2 is being replaced by a YOLO detector trained on
+> self-labeled synthetic data — see `docs/02_model_selection_rationale.md`
+> ("[Experimental branch]" entries) for the full rationale and measured
+> results. Stage 3's classification (DINOv2 + reference-library match) is
+> unchanged in spirit, just upgraded to a 768-dim model behind a FAISS
+> index. The text below is left describing `main`'s design so it stays an
+> accurate record of the baseline the experiment is measured against.
+
 ## Input characteristics (from the provided data)
 Both drawings are clean, digitally-generated raster line art — the assumption
 the classical CV stages are built on holds.
