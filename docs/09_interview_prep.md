@@ -778,3 +778,244 @@ it by hand every time (which worked, but doesn't scale to a team).
 twice, that a change with excellent synthetic numbers was actually a
 regression, and having the discipline to revert rather than rationalize
 keeping it because of the effort already invested.
+
+---
+
+## 13. Stress-test questions — thinking like the assessor, not the candidate
+
+The questions above are the ones you'd volunteer. These are the ones
+designed to find where the story is thinner than it sounds, or where a
+confident answer would actually be overclaiming. Each one gets the
+honest answer, including the ones where the honest answer concedes a
+real limitation — that's a stronger position in an interview than a
+confident non-answer, and it's consistent with how this whole project
+was actually run.
+
+### "Why didn't you just point a frontier VLM at the image and ask it to describe the circuit? Claude/GPT-4V are very good at this now — wouldn't that likely beat 65%?"
+
+This is the single most likely hard question, and it needs a precise
+answer, not a defensive one.
+
+Three separable reasons, in order of how strong they are:
+
+1. **The brief structurally requires you not to.** It lists preprocessing
+   logic, symbol/line detection *strategy*, connectivity inference,
+   post-processing/validation, JSON generation, and graph construction as
+   things *you must develop* — a VLM call that returns a finished
+   description doesn't produce any of those as inspectable stages. Even
+   if a VLM call were dropped in as one component, all six of those
+   surrounding stages would still need to exist and be justified
+   independently — so "just use a VLM" doesn't actually reduce the scope
+   of what has to be built and defended.
+2. **Explainability is the explicit, named evaluation axis, not
+   accuracy.** A VLM's answer is a finished description; there is no
+   equivalent of `evidence_trace` (which source voted what, and why) to
+   point at when asked "why did you decide this box is a BJT_NPN and not
+   a Potentiometer." Every decision in this pipeline traces to a specific
+   rule or a specific model with measurable, isolatable behavior. Losing
+   that traceability is losing the thing being graded, even in a
+   hypothetical world where the raw accuracy number were higher.
+3. **It's a real, honest possibility that raw accuracy would win** — this
+   should be conceded directly, not argued around. Say so plainly: "A
+   frontier VLM would plausibly get a higher first-pass number on these
+   two specific drawings. It would not give me a system I can add a
+   symbol class to without touching a prompt and hoping, would not give
+   me per-decision confidence I can fuse with other evidence, and
+   wouldn't give me the offline, deterministic, dependency-light system
+   the brief's own technical-expectations section is describing when it
+   asks for pre-processing logic, a detection *strategy*, and
+   post-processing as separate, ownable stages."
+
+If pushed further ("but couldn't you use a VLM *and* keep the stages"):
+yes — and that's exactly what §3.5 already does, just for text authoring
+rather than runtime inference, and it's the explicitly-scoped next step
+(§3.6/§11: a gated VLM arbiter for residual hard cases) — not implemented
+because there's no evidence yet that the deterministic sources have
+actually plateaued, and building it before that evidence exists would be
+exactly the kind of unjustified complexity this project was built to
+avoid.
+
+### "Your golden set is 32 symbols across 2 drawings. How much can you actually conclude from a percentage-point change on a sample that small?"
+
+Concede the math directly, then show you know what *is* still trustworthy.
+With 29 matched detections, **one symbol changing correctness moves the
+number by about 3.4 percentage points.** So a change like 62.1%->65.5%
+(one symbol's worth of net movement, roughly) should not be reported as
+"proof the technique works in general" — it's *consistent with* the
+technique helping, and specifically it's evidence of *no regression*,
+which is the weaker but still real claim actually being made each time.
+The larger jumps are the trustworthy ones: 56.2%->65.5% combined, or
+75.0%->81.2% on D4 alone from the linear probe, are multiple symbols'
+worth of movement, well outside single-symbol noise.
+
+The actual mitigation, not a dismissal of the concern: every kept change
+was checked against **two independently-tuned-against drawings**, not
+one — which is a real (if small) form of held-out validation, and it's
+exactly what caught the D4-only-81.2%-vs-D5-30.8% overfitting risk in
+the first place. The honest limitation, stated plainly if asked "so is
+two drawings actually enough": no — it's enough to catch gross
+overfitting and gross regressions, not enough to certify a specific
+percentage as a stable estimate of true accuracy on an arbitrary new
+drawing. More real, hand-verified drawings is the single most valuable
+thing that would change this (already the answer given to "what would
+you do with more resources").
+
+### "Classification accuracy is computed only on matched detections. Doesn't that let a bad detector hide behind a good number?"
+
+Yes, structurally — and it's a deliberate methodological choice with a
+named trade-off, not an oversight, but be ready to also give the blended
+number so it doesn't look like hiding behind the choice:
+
+**Why matched-only, deliberately:** conflating detection and
+classification into one blended number makes a failure impossible to
+attribute — a low score could mean "the localizer never found it" or
+"it found it and named it wrong," and those need completely different
+fixes. Reporting them separately (detection P/R/F1, classification
+accuracy *given* a correct detection) keeps each number diagnostic.
+
+**The blended, true end-to-end number, computed on request:** of all 32
+golden symbols, 29 were detected and 19 of those were also correctly
+classified — **19/32 ≈ 59.4%** actually end-to-end correct, a few points
+below the 65.5% headline. Knowing this number cold and volunteering it
+unprompted is a much stronger answer than being caught not having
+computed it.
+
+### "How were the fusion weights (YOLO 1.2, everything else 1.0) actually chosen? Grid search, or a guess?"
+
+Be honest: a single reasoned default, not a search. The reasoning (YOLO
+is the supervised, in-domain signal, so it gets a modest, not dominant,
+edge) is real and was checked for not causing regressions, but the
+specific value 1.2 was not swept against alternatives (1.0, 1.5, 2.0...)
+systematically. This is a genuine, named gap — the "ablation framework"
+discussed but not built (config-level weight toggles already support
+it, since `evidence_weights` is exposed exactly for this) would be the
+correct way to actually tune this rather than assert it. Good answer if
+pushed on "isn't that unscientific": the fusion *architecture*
+(weighted-sum-of-independently-abstaining-sources, replacing a fixed
+priority order) is the actual justified design decision, evidenced by
+measured improvement; the specific weight *value* is a reasonable
+default that hasn't regressed anything, which is a weaker but honestly
+stated claim.
+
+### "The geometry specialists have hand-picked pixel thresholds — 14px minimum run length, 0.4 fill ratio, Hough param2=30. Isn't that just as brittle as hardcoding to two drawings?"
+
+Partially concede, then draw the real distinction. The *thresholds*
+were calibrated using the only real crops available (D4/D5, plus this
+project's own KiCad reference renders) — so yes, there is a real,
+acknowledged risk they're overfit to those specific renderings and
+wouldn't transfer cleanly to a very differently-scaled or differently-
+styled drawing. This is *the same category of risk* as any classical CV
+threshold (the adaptive-binarization block size, the density thresholds
+in the original localizer) — calibrating a numeric constant against
+available examples is normal classical-CV practice, not unique
+brittleness, but it's real and worth naming rather than hiding.
+
+The distinction that *does* hold: the **rule** each specialist encodes
+(plate count and curvature distinguish battery/capacitor family; circle
+presence distinguishes BJT from potentiometer) is a general, documented
+drawing convention that holds for *any* schematic in this symbol family,
+not something specific to D4 or D5's content — only the numeric
+calibration is drawing-specific, and that's a much narrower, more
+honestly-scoped risk than "the whole approach only works on these two
+images." If pushed further: this is exactly why the NPN/PNP specialist
+(§3.6) was built, measured, and *not shipped* — the same calibration
+process was applied and it didn't generalize past the two reference
+renders it was tuned on, and the honest response was to leave it out,
+not force it in.
+
+### "You built a linear probe that operates on the same DINOv2 embeddings as the nearest-neighbor matcher. Isn't that redundant — why not just replace nearest-neighbor with the probe?"
+
+Because they were measurably wrong on different cases, not the same
+ones — mirroring exactly the reasoning that justified fusing YOLO and
+DINOv2 in the first place (non-overlapping error sets are the whole
+argument for fusion over replacement). The probe was kept as an
+*additional* vote specifically because a bad probe reading should only
+be able to be outvoted by a good nearest-neighbor reading, never allowed
+to silently override it — replacing nearest-neighbor outright would lose
+that safety property and bet everything on the probe generalizing better
+in every case, which wasn't measured to be true, only true on average.
+
+### "Five evidence sources, multi-pass OCR, geometry specialists — isn't this a lot of moving parts and latency for two evaluation drawings? Why not a simpler two-source system?"
+
+Fair complexity critique, answer with the actual measured deltas rather
+than architecture-for-its-own-sake: each source was added *after* the
+previous configuration's specific error cases were inspected and a
+specific source was identified as the fix — OCR closed cases DINOv2/YOLO
+both missed (a part number is evidence neither shape-matching approach
+can see), geometry closed cases where DINOv2/YOLO/OCR were all wrong
+together (Battery vs. Capacitor is a structural, not textual or
+gross-shape, distinction). Every addition is justified by a *specific,
+named* prior failure it fixes, not a hypothesis. On cost: total pipeline
+latency is ~15-20s, dominated by model loading and OCR, not by
+evaluating five lightweight fusion sources per candidate — the marginal
+cost of an additional source is small relative to what's already paid to
+run YOLO+DINOv2 at all.
+
+### "Sourcing 'multiple real style variants per class' from KiCad — you had to look at KiCad's library and decide which symbols looked similar enough to include. Isn't that manual curation, i.e. hand-labeling in disguise?"
+
+Precise distinction to draw here: it's manual *curation of which
+existing, independently-authored reference source to include* — never
+manual *annotation of what's in the evaluation drawings*. The symbols
+themselves, their classification, and their pin geometry all come from
+KiCad's own published library metadata, not from a human looking at D4
+or D5 and writing down "this box is a resistor." The "no manually
+labeled training data" claim is specifically about never hand-annotating
+the *evaluation* data or *training* images pixel-by-pixel — choosing
+which of KiCad's own pre-existing, pre-classified symbols to pull in is
+closer to picking which open dataset to use than to labeling one.
+
+### "If evaluation criteria explicitly deprioritize accuracy, why spend so much of the session's time on OCR priors, geometry specialists, and a linear probe instead of demonstrating scalability directly?"
+
+Two honest parts to this answer. First: the accuracy work *is* the
+demonstration of the architecture's scalability property in action —
+every one of those additions was itself an instance of "extend via a new
+independent evidence source or new reference data, not a retrain,"
+which is the concrete proof of the "generic, scalable" claim, not a
+detour from it. Second, more self-critically: yes, a meaningful fraction
+of that time would have been better spent earlier on a formal ablation
+framework and the consolidated documentation, and that reallocation
+*did happen* — once the rubric's explicit weighting was actually read
+carefully partway through, further accuracy work was consciously stopped
+in favor of consolidating documentation and evaluation methodology,
+which is itself worth mentioning as an example of course-correcting once
+better information was available.
+
+### "65.5% classification accuracy — isn't that just... not very good?"
+
+Don't get defensive; reframe with the number that actually matters for
+the rubric. In isolation, no, it isn't a high number. What's being
+graded per the brief's own stated weighting is whether it's a *generic,
+scalable, well-justified* pipeline, and whether every decision along the
+way is defensible — and the strongest evidence for that isn't the
+percentage, it's the trail behind it: a reproducible measurement
+harness built before making further claims, five independently-
+justified improvements each with a measured before/after, and two
+regressions caught and reverted with real numbers instead of shipped on
+faith. A higher number produced by trusting synthetic validation (as
+both reverted experiments did) would have been a *worse* answer to this
+exact question, not a better one.
+
+### "Walk me through your test suite — how do you know the code itself is correct, separately from the model outputs being right?"
+
+36 unit tests across the classification-evidence layer (fusion math,
+OCR designator matching including the token-independence fix, the
+geometry specialists against known reference crops, the embedding cache
+signature/invalidation logic), plus JSON-schema conformance tests. They
+deliberately don't touch GPU-backed models (DINOv2, YOLO) directly —
+those are validated by `edp eval` against real output instead — the
+unit tests cover the deterministic logic surrounding the models: does
+the fusion formula pick the right winner given known inputs, does the
+designator regex correctly reject an unparseable token, does a plate-
+count of 4 correctly trigger the Battery rule. If pushed on coverage
+gaps: the wire/connectivity stage (skeletonization, junction decomposition,
+net-building) has no dedicated unit tests yet beyond `test_nets.py`'s
+existing coverage — a real, nameable gap, not a hidden one.
+
+### "What would you do differently if you started over?"
+
+Build the golden-truth evaluation harness *first*, before any
+classification improvement work, rather than after several rounds of
+ad-hoc D4-only tuning — the D4-vs-D5 overfitting risk would have been
+visible from day one instead of discovered partway through. Everything
+built before that point turned out fine, but it was validated later
+than it should have been designed to be validated.
