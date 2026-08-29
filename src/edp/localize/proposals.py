@@ -20,6 +20,7 @@ from skimage.morphology import skeletonize
 from edp.config import LocalizeConfig
 from edp.types import BBox, Candidate, Point, TextToken
 
+from .merge import merge_overlapping
 from .morphology import thin_stroke_mask
 
 _NEIGHBOR_KERNEL = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])
@@ -131,50 +132,7 @@ def find_candidates(
         kind = "symbol" if region_wire_frac < 0.5 else "ambiguous"
         candidates.append(Candidate(bbox=bbox, kind=kind))
 
-    return _merge_overlapping(candidates, cfg.candidate_merge_overlap)
-
-
-def _merge_overlapping(candidates: list[Candidate], overlap_threshold: float) -> list[Candidate]:
-    """Density blobs for one physical symbol occasionally survive as two
-    or three separate, heavily-overlapping candidates rather than one
-    (observed on D4's R4: three stacked boxes over a single resistor,
-    each independently classified — wasted classification calls, and a
-    JSON with the same physical symbol appearing three times under
-    different ids). Repeatedly unions any pair whose overlap relative to
-    the smaller box exceeds the threshold, until no pair does.
-    """
-    boxes = list(candidates)
-    changed = True
-    while changed and len(boxes) > 1:
-        changed = False
-        for i in range(len(boxes)):
-            for j in range(i + 1, len(boxes)):
-                if _overlap_ratio(boxes[i].bbox, boxes[j].bbox) >= overlap_threshold:
-                    merged_bbox = _union_bbox(boxes[i].bbox, boxes[j].bbox)
-                    kind = boxes[i].kind if boxes[i].kind == boxes[j].kind else "ambiguous"
-                    boxes[i] = Candidate(bbox=merged_bbox, kind=kind)
-                    del boxes[j]
-                    changed = True
-                    break
-            if changed:
-                break
-    return boxes
-
-
-def _overlap_ratio(a: BBox, b: BBox) -> float:
-    ax0, ay0, ax1, ay1 = a
-    bx0, by0, bx1, by1 = b
-    ix0, iy0 = max(ax0, bx0), max(ay0, by0)
-    ix1, iy1 = min(ax1, bx1), min(ay1, by1)
-    if ix1 <= ix0 or iy1 <= iy0:
-        return 0.0
-    intersection = (ix1 - ix0) * (iy1 - iy0)
-    smaller_area = min((ax1 - ax0) * (ay1 - ay0), (bx1 - bx0) * (by1 - by0))
-    return intersection / smaller_area if smaller_area > 0 else 0.0
-
-
-def _union_bbox(a: BBox, b: BBox) -> BBox:
-    return (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
+    return merge_overlapping(candidates, cfg.candidate_merge_overlap)
 
 
 def _tighten_to_ink(binary: np.ndarray, loose_bbox: BBox, pad: int) -> BBox:

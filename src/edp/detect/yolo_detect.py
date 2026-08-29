@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from edp.config import LocalizeConfig
+from edp.localize.merge import merge_overlapping
 from edp.types import BBox, Candidate
 
 
@@ -58,4 +59,14 @@ def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig) -> list[Candidat
             continue
         bbox: BBox = (x0, y0, x1, y1)
         candidates.append(Candidate(bbox=bbox, kind="symbol"))
-    return candidates
+
+    # YOLO's own NMS (iou=cfg.yolo_iou_threshold above) doesn't catch every
+    # near-duplicate: two boxes from different anchors/scales can each pass
+    # NMS independently while still being 1-2px apart on the same physical
+    # symbol. Observed concretely on D4: the same MOSFET, transistor, and
+    # battery each boxed twice under different ids, which cascaded into
+    # over-merged connectivity nets downstream (two near-identical boxes'
+    # terminals both snapping to the same wire). Reuses the same merge the
+    # density-based localizer needed for an analogous reason — see
+    # localize/merge.py.
+    return merge_overlapping(candidates, cfg.candidate_merge_overlap)
