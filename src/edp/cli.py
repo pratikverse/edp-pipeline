@@ -70,6 +70,13 @@ def _cmd_build_library(args: argparse.Namespace) -> None:
     print(f"[edp] saved -> {out_path}")
 
 
+def _cmd_eval(args: argparse.Namespace) -> None:
+    from edp.eval import evaluate_set, print_report
+
+    results = evaluate_set(args.golden_dir, args.predicted_dir)
+    print_report(results)
+
+
 def _cmd_serve(args: argparse.Namespace) -> None:
     import uvicorn
 
@@ -91,6 +98,11 @@ def main(argv: list[str] | None = None) -> int:
     p_lib.add_argument("--config", default="config/default.yaml")
     p_lib.add_argument("--out", default="data/reference/index.npz")
     p_lib.set_defaults(func=_cmd_build_library)
+
+    p_eval = sub.add_parser("eval", help="score predicted JSON against hand-verified golden JSON (docs/08 Phase 0)")
+    p_eval.add_argument("--golden-dir", default="data/golden")
+    p_eval.add_argument("--predicted-dir", default="outputs/golden_prep")
+    p_eval.set_defaults(func=_cmd_eval)
 
     p_serve = sub.add_parser("serve", help="run the demo web frontend")
     p_serve.add_argument("--port", type=int, default=8000)

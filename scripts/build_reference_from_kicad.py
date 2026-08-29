@@ -37,6 +37,15 @@ SOURCES = {
     "Antenna": "Antenna",
     "Transformer": "Transformer",
     "Fuse": "Fuse",
+    "R_Potentiometer": "Potentiometer",
+    "Optocoupler_4N25": "Optocoupler",
+    "Relay_SPDT": "Relay",
+    "Load_Block": "Load",
+    # Style variants (docs/08 Phase 1.2 / 1.3): same class, a second drawing
+    # convention, so the library isn't blind to whichever one a given real
+    # drawing happens to use.
+    "Battery_MultiCell": "Battery",  # multi-cell (long/short line pairs) vs Battery_Cell's single cell
+    "Transformer_Wavy": "Transformer",  # parallel-wavy-line winding vs Transformer's interleaved-dash core
 }
 
 

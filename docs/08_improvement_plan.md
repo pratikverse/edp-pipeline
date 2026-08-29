@@ -166,16 +166,56 @@ merged boxes instead of dropping class entirely.
 **Success criterion:** classification accuracy on matched detections ≥ 75%
 (from ~44% today).
 
-### 1.2 Add the missing classes — *~4h*
-Add to `data/reference/` and the synthetic generators:
-`IC_DIP`, `Optocoupler`, `Potentiometer` (KiCad `R_Potentiometer`), `Relay`
-(KiCad 404'd — source from Wikimedia SVG or draw), `Block`/`Load`, plus alternate
-style variants for `Transformer` (parallel-wavy-line convention) and `Battery`.
+### 1.2 Add the missing classes — *~4h* — **done 2026-08-29**
+Added to `data/reference/` (via `data/kicad_raw/` + `scripts/build_reference_from_kicad.py`):
+`Optocoupler` (KiCad `4N25`, the base symbol `4N35` and family `extends` — using
+the base directly), `Potentiometer` (KiCad `R_Potentiometer`), `Relay` (KiCad
+*does* have `Relay_SPDT` under `Relay.kicad_symdir` — the plan's "KiCad 404'd"
+note turned out to be about the wrong subdirectory, not a real gap), `Load`
+(no KiCad equivalent exists for a generic labelled block — hand-authored as a
+minimal S-expression file in the same convention as the rest of
+`data/kicad_raw/`, not sourced), plus style variants `Battery_MultiCell` (the
+long/short multi-cell symbol, vs. the existing single-cell `Battery_Cell`) and
+`Transformer_Wavy` (parallel-wavy-line winding convention, hand-authored —
+KiCad's library only ships part-specific transformer footprints, no generic
+wavy-line symbol). Class count: 17 → 21.
 
-Regenerate synthetic data, retrain. This is the "add a class = data operation, not a
-code change" claim from `docs/02` being exercised for real.
+Regenerated the mixed synthetic training set (`data/synth_mixed/`: 500 scatter +
+300 dense + 150 ladder-topology = 950 train / 60 val images, all classes
+dynamically enumerated from `data/reference/` so no generator code changes were
+needed) and retrained (`symbol_detector_mixed_v2`, 40 epochs, GPU). This is the
+"add a class = data operation, not a code change" claim from `docs/02` exercised
+for real — every generator picked the new classes up automatically.
 
-**Success criterion:** zero symbols in the golden set have no correct available class.
+**Success criterion:** zero symbols in the golden set have no correct available
+class. **Met** — `data/golden/D4.json`'s two previously-`Unknown` symbols
+(`SYM_004` LOAD block, `SYM_012` IC1 MCT2E optocoupler) were updated to `Load`
+and `Optocoupler` once those classes existed.
+
+**But retraining YOLO on the expanded 21-class set is NOT shipped as the
+default**, based on measurement, not assumption: `symbol_detector_mixed_v2`
+scores excellently on synthetic validation (mAP50 > 0.98 on every new class)
+but regresses real-world detection on `edp eval`'s D4 golden set —
+F1 0.914 → 0.686. Concretely: boxes that the 17-class model found confidently
+(Switch, Capacitor_Polarized, Battery) come back from the 21-class model at
+conf 0.02–0.10, below any reasonable threshold, and misclassified when they
+do surface. Believed cause: yolov8n's fixed ~3M-param capacity spread across
+21 classes instead of 17, not anything wrong with the new classes themselves
+— the new classes fit *training* data fine, the regression shows up on the
+out-of-distribution real image. `config/default.yaml` keeps `yolo_weights`
+pointed at the 17-class run; the 21-class weights are kept
+(`outputs/yolo_runs/symbol_detector_mixed_v2/`) for whenever this gets fixed
+(more epochs, more per-class synthetic data, or a larger backbone — each is a
+testable hypothesis, not yet tried).
+
+**Second-order finding**: even with YOLO reverted, `data/reference/`'s
+expansion alone shifted two of DINOv2's nearest-neighbour matches on D4 —
+`SYM_011` (T2BC547, BJT_NPN) now matches `Potentiometer` and `SYM_012` (IC1)
+now matches `Relay`, both wrong, where they matched different wrong classes
+before. Classification accuracy on the golden set is unchanged in aggregate
+(9/16 correct either way) but the specific confusions moved, which is exactly
+why `edp eval` needs to gate a library change like a code change, not just a
+model swap — see `docs/08` section 3.
 
 ### 1.3 Domain-randomised rendering — *~1 day*
 In `build_reference_from_kicad.py` and `generate_synthetic_dataset.py`:
