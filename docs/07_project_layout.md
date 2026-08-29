@@ -129,10 +129,10 @@ wires:
 ## CLI contract
 
 ```bash
-edp run data/raw/D5.png --config config/default.yaml --out outputs/
-edp run data/raw/ --out outputs/              # batch over a directory
+edp run data/validation/D5.png --config config/default.yaml --out outputs/
+edp run data/validation/ --out outputs/              # batch over a directory
 edp build-library data/reference/ --out data/reference/index.npz
-edp debug data/raw/D5.png --stage wires       # overlay render for one stage
+edp debug data/validation/D5.png --stage wires       # overlay render for one stage
 edp serve --port 8000                         # demo frontend
 ```
 

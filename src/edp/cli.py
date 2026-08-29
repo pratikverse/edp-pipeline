@@ -1,7 +1,7 @@
 """CLI contract per docs/07_project_layout.md:
 
-    edp run data/raw/D5.png --config config/default.yaml --out outputs/
-    edp run data/raw/ --out outputs/
+    edp run data/validation/D5.png --config config/default.yaml --out outputs/
+    edp run data/validation/ --out outputs/
     edp build-library data/reference/ --out data/reference/index.npz
     edp serve --port 8000
 """
