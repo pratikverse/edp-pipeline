@@ -11,6 +11,11 @@
     --text: #e6e8ef;
     --muted: #9aa1b2;
     --accent: #5b9dff;
+    --json-key: #7ec1ff;
+    --json-string: #9fd88a;
+    --json-number: #f2b366;
+    --json-bool: #d78bf0;
+    --json-punct: #5c6376;
   }
   * { box-sizing: border-box; }
   body {
@@ -42,6 +47,7 @@
   main {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
     gap: 1px;
     background: var(--border);
     height: calc(100vh - 57px);
@@ -50,6 +56,9 @@
     background: var(--bg);
     overflow: auto;
     padding: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
   section h2 {
     font-size: 12px;
@@ -57,6 +66,15 @@
     letter-spacing: 0.05em;
     color: var(--muted);
     margin: 0 0 12px;
+    flex: none;
+  }
+  .panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
   }
   pre {
     background: var(--panel);
@@ -64,14 +82,22 @@
     border-radius: 8px;
     padding: 16px;
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.6;
     overflow: auto;
     white-space: pre-wrap;
     word-break: break-word;
+    width: 100%;
+    margin: 0;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
   }
-  img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); }
+  .jk { color: var(--json-key); }
+  .js { color: var(--json-string); }
+  .jn { color: var(--json-number); }
+  .jb { color: var(--json-bool); }
+  .jp { color: var(--json-punct); }
+  img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; border: 1px solid var(--border); }
   .status { color: var(--muted); font-size: 13px; }
-  .empty { color: var(--muted); font-size: 13px; padding: 40px 0; text-align: center; }
+  .empty { color: var(--muted); font-size: 13px; padding: 40px 0; text-align: center; margin: auto; }
 </style>
 </head>
 <body>
@@ -85,20 +111,62 @@
 </header>
 <main>
   <section>
+    <h2>Original Drawing</h2>
+    <div class="panel-body" id="original-out"><div class="empty">Upload a drawing and click Process.</div></div>
+  </section>
+  <section>
+    <h2>Detected Symbols</h2>
+    <div class="panel-body" id="overlay-out"><div class="empty">&nbsp;</div></div>
+  </section>
+  <section>
     <h2>JSON</h2>
-    <div id="json-out"><div class="empty">Upload a drawing and click Process.</div></div>
+    <div class="panel-body" id="json-out"><div class="empty">&nbsp;</div></div>
   </section>
   <section>
     <h2>Graph</h2>
-    <div id="graph-out"><div class="empty">&nbsp;</div></div>
+    <div class="panel-body" id="graph-out"><div class="empty">&nbsp;</div></div>
   </section>
 </main>
 <script>
 const fileInput = document.getElementById('file');
 const runBtn = document.getElementById('run');
 const statusEl = document.getElementById('status');
+const originalOut = document.getElementById('original-out');
+const overlayOut = document.getElementById('overlay-out');
 const jsonOut = document.getElementById('json-out');
 const graphOut = document.getElementById('graph-out');
+
+function escapeHtml(s) {
+  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+}
+
+// Lightweight JSON syntax highlighter: stringify then tag tokens by regex.
+// Good enough for a demo pane; not meant to be a general-purpose highlighter.
+function highlightJson(value) {
+  const text = escapeHtml(JSON.stringify(value, null, 2));
+  return text.replace(
+    /(&quot;(?:\\.|[^&"\\])*&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+    (match, str, isKey, bool, num) => {
+      if (str) return isKey ? `<span class="jk">${str}</span><span class="jp">${isKey}</span>` : `<span class="js">${str}</span>`;
+      if (bool) return `<span class="jb">${bool}</span>`;
+      if (num) return `<span class="jn">${num}</span>`;
+      return match;
+    }
+  );
+}
+
+function showImage(container, src) {
+  container.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = src;
+  container.appendChild(img);
+}
+
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  showImage(originalOut, URL.createObjectURL(file));
+});
 
 runBtn.addEventListener('click', async () => {
   const file = fileInput.files[0];
@@ -106,6 +174,7 @@ runBtn.addEventListener('click', async () => {
 
   runBtn.disabled = true;
   statusEl.textContent = 'processing...';
+  overlayOut.innerHTML = '<div class="empty">Running pipeline...</div>';
   jsonOut.innerHTML = '<div class="empty">Running pipeline...</div>';
   graphOut.innerHTML = '';
 
@@ -117,15 +186,14 @@ runBtn.addEventListener('click', async () => {
     if (!res.ok) throw new Error(`server returned ${res.status}`);
     const data = await res.json();
 
+    showImage(originalOut, data.original_png);
+    showImage(overlayOut, data.overlay_png);
+    showImage(graphOut, data.graph_png);
+
     jsonOut.innerHTML = '';
     const pre = document.createElement('pre');
-    pre.textContent = JSON.stringify(data.json, null, 2);
+    pre.innerHTML = highlightJson(data.json);
     jsonOut.appendChild(pre);
-
-    graphOut.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = data.graph_png;
-    graphOut.appendChild(img);
 
     const timingLine = Object.entries(data.timing || {})
       .map(([k, v]) => `${k}: ${v}s`).join(' · ');
