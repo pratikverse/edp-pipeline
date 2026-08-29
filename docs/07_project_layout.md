@@ -50,13 +50,26 @@ electrical-drawing-pipeline/
 │   ├── kicad_raw/            # fetched .kicad_sym source files
 │   ├── reference/            # rendered symbol PNGs + terminal templates,
 │   │                         # one dir per class — output of build_reference_from_kicad.py
-│   └── synth/                # [experimental, gitignored] generated YOLO training set —
-│                              # output of generate_synthetic_dataset.py, fully regeneratable
+│   ├── synth/                # [experimental, gitignored] generated YOLO training set —
+│   │                          # output of generate_synthetic_dataset.py, fully regeneratable
+│   ├── synth_dense/          # [experimental, gitignored] denser-packing training variant
+│   ├── synth_holdout/        # [experimental, gitignored] held-out synthetic sanity check —
+│   │                          # NOT a substitute for real validation (see docs/02): same
+│   │                          # generation distribution as training, so it only confirms
+│   │                          # in-distribution generalization, not real-world transfer
+│   └── validation/            # REAL circuit diagrams for actual validation: D4, D5, plus
+│                               # 50 downloaded sample circuits in a different drawing
+│                               # convention than KiCad's — the test that matters, since it's
+│                               # not from the same generator as training data. No ground-
+│                               # truth boxes exist for these; evaluated by visual audit
+│                               # (scripts/validate_on_real.py), not automated mAP.
 ├── scripts/
 │   ├── build_reference_from_kicad.py   # .kicad_sym -> data/reference/ (see docs/05)
 │   ├── generate_synthetic_dataset.py   # [experimental] composites reference symbols
 │   │                                   # into labeled YOLO training scenes (see docs/02)
-│   └── train_yolo.py                   # [experimental] trains the YOLO localizer
+│   ├── train_yolo.py                   # [experimental] trains the YOLO localizer
+│   └── validate_on_real.py             # [experimental] runs the full pipeline over
+│                                        # data/validation/, writes overlays for audit
 ├── config/
 │   └── default.yaml
 ├── outputs/                  # per-drawing JSON, graphs, debug overlays;
