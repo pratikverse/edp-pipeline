@@ -45,6 +45,7 @@ classify:
   evidence_weights: {}
   reference_designators_path: config/reference_designators.yaml
   ambiguity_margin_threshold: 0.15  # reserved for confusion-pair specialist routing (unused until one exists)
+  probe_model_path: outputs/probe/linear_probe.joblib  # docs/08 Phase 7; abstains if this file doesn't exist
 
 text:
   upscale_factor: 3

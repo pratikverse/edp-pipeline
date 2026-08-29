@@ -22,7 +22,14 @@ no scores) rather than being forced to guess:
     an exact part number is near-authoritative, a bare designator is a
     moderate vote, unparseable OCR contributes nothing at all.
 
-A fourth source, geometry (classify/specialists.py), only joins the vote
+A fourth source, "dinov2_probe" (classify/probe.py), is a linear classifier
+trained on frozen DINOv2 embeddings of domain-randomized synthetic crops
+(scripts/train_linear_probe.py, docs/08 Phase 7) — an independently
+evaluable alternative to the "dinov2" nearest-neighbour vote, reusing the
+same embedding at zero extra cost. Abstains cleanly if no probe artifact
+has been trained yet.
+
+A fifth source, geometry (classify/specialists.py), only joins the vote
 when the first three leave the result thin between two-or-more candidates
 that fall inside one specialist's known confusion group (Battery vs
 Capacitor(_Polarized), or BJT vs Potentiometer) — never on every symbol,
@@ -48,6 +55,7 @@ from edp.types import Candidate, Symbol, Terminal
 from .embedder import Embedder
 from .evidence import ClassificationEvidence, fuse_evidence, no_evidence
 from .library import LibraryEntry, ReferenceLibrary
+from .probe import probe_evidence
 from .specialists import CONFUSION_GROUPS, select_specialist
 from .text_prior import evidence_from_text
 
@@ -62,6 +70,7 @@ DEFAULT_EVIDENCE_WEIGHTS = {
     # against a weak YOLO one.
     "yolo": 1.2,
     "dinov2": 1.0,
+    "dinov2_probe": 1.0,
     "text_prior": 1.0,
     # Geometry specialists' own `confidence` field already encodes how sure
     # a given reading is (0.55-0.85 depending on which rule fired -- see
@@ -143,22 +152,30 @@ def _select_ambiguous_specialist(fusion_candidates: list[tuple[str, float]]):
         all (only YOLO voted for it, weakly) -- so even a "2 of top-3
         belong to the same confusion group" check missed it, since only
         one group member (Potentiometer, the wrong answer) was present.
+      - SYM_013 (Capacitor_Polarized), found only after adding the
+        dinov2_probe evidence source: the probe's own vote pushed an
+        unrelated class (LED) to a narrow top-1 (margin 0.008) ahead of
+        Battery and Capacitor_Polarized sitting right behind it at 2nd/3rd
+        -- a pure "is top-1 in a group" check missed this because the
+        wrong winner itself isn't a group member at all, even though the
+        group is obviously in play one rank down.
 
-    So this checks the simplest thing that actually matches the intent --
-    "is the *winning* class one this project already knows is confusable"
-    -- and fires whenever fusion's own top-1 falls in a known confusion
-    group, regardless of what else is nearby in the ranking or how large
-    the margin looks. This fires somewhat more often than a strict margin
-    check would (every Battery/Capacitor*/BJT*/Potentiometer top-1, not
-    just thin-margin ones), which is an acceptable trade against a
-    specialist that's cheap (a handful of OpenCV calls, no model inference)
-    and abstains cleanly when its own geometry doesn't support a call.
+    So this checks two things, either sufficient on its own: (a) fusion's
+    top-1 itself belongs to a known confusion group, or (b) at least two
+    of the top-3 candidates do, regardless of what's in first place. This
+    fires somewhat more often than a strict margin check would, which is
+    an acceptable trade against a specialist that's cheap (a handful of
+    OpenCV calls, no model inference) and abstains cleanly when its own
+    geometry doesn't support a call.
     """
     if not fusion_candidates:
         return None
     top1_class = fusion_candidates[0][0]
+    top3_classes = [cn for cn, _score in fusion_candidates[:3]]
     for group in CONFUSION_GROUPS:
         if top1_class in group:
+            return select_specialist(group)
+        if sum(1 for cn in top3_classes if cn in group) >= 2:
             return select_specialist(group)
     return None
 
@@ -221,8 +238,11 @@ def classify_candidates(
         )
         yolo_ev = _yolo_evidence(candidate)
         text_ev = evidence_from_text(hints[i], cfg.reference_designators_path)
+        probe_ev = probe_evidence(embeddings[i], cfg.probe_model_path) if len(embeddings) else no_evidence(
+            "dinov2_probe", reason="empty_embeddings"
+        )
 
-        fusion = fuse_evidence([yolo_ev, dinov2_ev, text_ev], weights, unknown_type=UNKNOWN_TYPE)
+        fusion = fuse_evidence([yolo_ev, dinov2_ev, probe_ev, text_ev], weights, unknown_type=UNKNOWN_TYPE)
 
         # Ambiguity routing (docs/08 Phase 6): only reach for a geometry
         # specialist when the top fused candidates fall inside one
@@ -234,7 +254,9 @@ def classify_candidates(
         specialist = _select_ambiguous_specialist(fusion.candidates)
         if specialist is not None:
             geometry_ev = specialist(crops[i])
-            fusion = fuse_evidence([yolo_ev, dinov2_ev, text_ev, geometry_ev], weights, unknown_type=UNKNOWN_TYPE)
+            fusion = fuse_evidence(
+                [yolo_ev, dinov2_ev, probe_ev, text_ev, geometry_ev], weights, unknown_type=UNKNOWN_TYPE
+            )
 
         symbol_type = fusion.top_class
         confidence = fusion.top_score

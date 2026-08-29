@@ -57,6 +57,12 @@ class ClassifyConfig(BaseModel):
     # exists; kept here now so the threshold is configurable from day one rather
     # than added later as a breaking config change.
     ambiguity_margin_threshold: float = 0.15
+    # Linear-probe evidence source (docs/08 Phase 7, classify/probe.py). Points
+    # at the artifact scripts/train_linear_probe.py writes; if the file doesn't
+    # exist yet, the source just abstains (no_evidence) rather than the
+    # pipeline failing -- same graceful-degradation pattern as an empty
+    # reference library.
+    probe_model_path: str = "outputs/probe/linear_probe.joblib"
 
 
 class TextConfig(BaseModel):

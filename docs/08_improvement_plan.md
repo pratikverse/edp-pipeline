@@ -217,35 +217,71 @@ before. Classification accuracy on the golden set is unchanged in aggregate
 why `edp eval` needs to gate a library change like a code change, not just a
 model swap — see `docs/08` section 3.
 
-### 1.3 Domain-randomised rendering — *~1 day*
-In `build_reference_from_kicad.py` and `generate_synthetic_dataset.py`:
-- stroke width sampled 1–3px (currently fixed)
-- rotation jitter ±3–5°
-- 1px morphological dilate/erode (simulates rendering-weight variation)
-- Gaussian blur σ ∈ [0, 0.8], contrast/gamma jitter
+### 1.3 Domain-randomised rendering — *partially done 2026-08-29*
+Implemented as `scripts/domain_randomize.py` (rotation jitter ±4°, stroke-width
+dilate/erode, Gaussian blur, sensor noise, contrast/gamma jitter, simulated JPEG
+re-encode) — semantics-preserving only, no aspect distortion, no rotation past a
+few degrees (the existing 0/90/180/270 handling already covers real orientation
+changes).
 
-Attacks the KiCad→real gap (**2.4**) for both classifier paths simultaneously.
-Requires a retrain (~15 min on GPU now).
+Used for a **linear probe**, not a YOLO retrain: `scripts/train_linear_probe.py`
+generates ~7,300 domain-randomised crops (every reference image × rotation ×
+mirror × 40 jittered variants) and fits a logistic-regression classifier on their
+frozen DINOv2 embeddings. Wired in as a new, independent `dinov2_probe` evidence
+source (`classify/probe.py`) alongside the existing nearest-neighbour `dinov2`
+source — not a replacement, so a bad probe reading can't override a good
+nearest-neighbour one on its own, only outvote it.
 
-**Success criterion:** gap between synthetic-val mAP50 and golden-set detection F1
-narrows by ≥ 30%.
+Deliberately did **not** retrain YOLO with domain-randomised composites this
+pass, given Phase 1.2's YOLO retrain already measurably regressed real detection
+despite excellent synthetic-val numbers (section 1.2 above) — the probe route
+tests the same "attack the KiCad→real gap" idea with the detector held fixed, so
+a bad outcome is isolated to classification and easy to revert (as the geometry
+specialists and OCR prior already are).
 
-### 1.4 Geometric disambiguation for confusion pairs — *~1 day*
-For pairs still confused after 1.1–1.3, add deterministic checks that run *only*
-when the classifier's top-2 are a known confusion pair with a thin margin:
+**Result (measured, `edp eval` on D4, chained on top of the OCR prior and
+geometry specialists below):** classification accuracy 75.0% → 81.2% (12/16 →
+13/16), zero detection regression. Two symbols flipped correct (`SYM_006`
+Battery, `SYM_013` Capacitor_Polarized); no new errors introduced. Caught one
+routing gap live: the probe's own vote can push an *unrelated* class to a
+narrow top-1 ahead of the true confusion pair sitting one rank down (observed
+concretely on `SYM_013`, where `LED` edged out `Battery`/`Capacitor_Polarized`
+by a 0.008 margin) — `match.py`'s specialist router was widened to check "≥2 of
+top-3 belong to a group" in addition to "top-1 belongs to a group" specifically
+because of this.
 
-- **Capacitor vs Battery** — count horizontal line segments and compare lengths.
-  Two equal → capacitor. Alternating long/short (≥3) → battery.
-- **NPN vs PNP** — locate the arrowhead on the emitter lead; pointing *toward* the
-  base = PNP, *away* = NPN.
-- **Diode vs Zener** — cathode bar is a plain line (diode) vs. bent ends (zener):
-  check for perpendicular stubs at the bar's ends.
+**Remaining from the original idea:** applying domain randomisation to YOLO's
+own training composites (`generate_synthetic_dataset.py`) is still open, still
+carries the same regression risk Phase 1.2 already demonstrated, and would need
+the same `edp eval`-gated treatment before shipping.
+
+### 1.4 Geometric disambiguation for confusion pairs — *partially done 2026-08-29*
+Implemented in `classify/specialists.py`, routed only when the fused top
+candidates fall in a known confusion group (`match.py`'s
+`_select_ambiguous_specialist`), each specialist free to abstain rather than
+force a call:
+
+- **Battery vs Capacitor vs Capacitor_Polarized** — done, shipped. Plate count
+  (≥4 alternating → Battery), plate curvature (bowed → Capacitor_Polarized in
+  this project's own drawing style), "+" mark as a weaker fallback vote.
+- **BJT (either polarity) vs Potentiometer** — done, shipped. Hough-circle
+  presence (BJT family, drawn inside a circle) vs. rectangular body with no
+  circle (Potentiometer).
+- **NPN vs PNP** (arrowhead direction) — implemented and unit-tested, **not
+  routed**: 2/2 correct on this project's own clean reference renders but only
+  1/3 correct on D4's real transistor crops, worse than chance there. Left in
+  the module, documented, and deliberately excluded from
+  `select_specialist`'s routing rather than shipped anyway.
+- **Diode vs Zener** (bent-cathode-stub check) — not started.
 
 Hand-coding is appropriate here specifically because the distinguishing feature is a
 **documented drawing convention**, not a learned statistical pattern — the same
 reasoning that justified the junction-dot rule in `docs/06`.
 
-**Success criterion:** confusion-pair error rate < 10%.
+**Success criterion:** confusion-pair error rate < 10%. **Not yet met overall**
+(Battery/Capacitor pair is now fully resolved on D4; BJT/Potentiometer and
+Diode/Zener are not) — see the conversation record / `edp eval` output for the
+current per-symbol breakdown.
 
 ### 1.5 Calibrated confidence & abstention — *~4h*
 Replace the single global `unknown_similarity_threshold: 0.62` with per-class
