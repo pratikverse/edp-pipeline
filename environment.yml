@@ -2,8 +2,16 @@ name: edp
 # NOTE: torch/torchvision are installed via pip (see below), not conda.
 # Pulling them from the `pytorch` conda channel alongside conda-forge
 # caused an MKL/OpenMP DLL version mismatch on Windows (fbgemm.dll failed
-# to load, WinError 182). The official CPU wheels from
-# download.pytorch.org bundle a self-contained runtime and avoid this.
+# to load, WinError 182). The official wheels from download.pytorch.org
+# bundle a self-contained runtime and avoid this.
+#
+# GPU (recommended, if an NVIDIA GPU is present — training a YOLO detector
+# on CPU is viable but slow, ~3.2-3.5h for 40 epochs on ~600-1200 images
+# vs. dramatically less on a GPU):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# CPU-only fallback (what the pip block below installs by default):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# scripts/train_yolo.py auto-detects CUDA and uses it when available.
 channels:
   - conda-forge
   - defaults
