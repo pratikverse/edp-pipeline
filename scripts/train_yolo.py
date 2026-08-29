@@ -6,6 +6,7 @@ this is folded into the pipeline.
 
 Usage:
     python scripts/train_yolo.py --epochs 40
+    python scripts/train_yolo.py --data data/synth_dense/data.yaml --name symbol_detector_dense
 """
 from __future__ import annotations
 
@@ -29,9 +30,11 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=16)
+    parser.add_argument("--data", type=str, default="data/synth/data.yaml")
+    parser.add_argument("--name", type=str, default="symbol_detector")
     args = parser.parse_args()
 
-    data_yaml = REPO_ROOT / "data" / "synth" / "data.yaml"
+    data_yaml = REPO_ROOT / args.data
     model = YOLO("yolov8n.pt")
     model.train(
         data=str(data_yaml),
@@ -40,7 +43,7 @@ def main() -> None:
         batch=args.batch,
         device="cpu",
         project=str(REPO_ROOT / "outputs" / "yolo_runs"),
-        name="symbol_detector",
+        name=args.name,
         patience=15,
         verbose=True,
     )
