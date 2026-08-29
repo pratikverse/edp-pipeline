@@ -35,8 +35,9 @@ work:
 - It drives graph construction (`emit/graph_out.py` — node/edge attributes
   on the bipartite and projected graphs come from it)
 - It drives the self-consistency checks (`validate/checks.py`)
-- It's available for debugging via `emit/json_out.py::to_json_dict_extended`,
-  not wired into the CLI or the demo API by default
+- It's the source for `emit/graph_out.py`'s bipartite graph, which does
+  carry this richer detail (net/terminal-level attributes) even though the
+  trimmed JSON itself doesn't
 
 See `06_data_model.md` for why a net (an N-way conductor) rather than a
 pairwise edge is still the primary connectivity object internally, even
@@ -56,8 +57,8 @@ flattening is exactly what `to_json_dict` does at the boundary.
 - **id**: instance identifier, resolved via OCR association where
   available; falls back to an auto-generated id (`SYM_003`) if no label is
   detected nearby. (Which case applied is tracked internally as
-  `label_source`, but is not part of the emitted object — see
-  `to_json_dict_extended` if that provenance is needed.)
+  `label_source` on the `Symbol` object, but is not part of the emitted
+  JSON.)
 - **type**: symbol class from the reference embedding library (e.g.
   Resistor, Capacitor, BJT_NPN, MOSFET_N, Ground, Crystal, Inductor,
   Transformer, Switch, Antenna, Diode, LED, Zener, Battery, Fuse) — see

@@ -91,15 +91,6 @@ class TextToken:
 
 
 @dataclass
-class SkeletonEdge:
-    """One traced path in the wire skeleton graph, between two node ids."""
-
-    node_a: int
-    node_b: int
-    polyline: list[Point]
-
-
-@dataclass
 class Net:
     """An equivalence class of terminals joined by one continuous conductor.
 

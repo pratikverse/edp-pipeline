@@ -1,21 +1,18 @@
-"""Morphological ops that separate "symbol" regions from "wire" regions,
-and close dashed boundaries (e.g. the SHIELD box in D5) before contour
-extraction. See docs/01_architecture_overview.md stage 2."""
+"""Morphological ops that separate "symbol" regions from "wire" regions.
+See docs/01_architecture_overview.md stage 2.
+
+A `close_dashed_boundaries` helper (dilate-then-erode to bridge a dashed
+rectangle's gaps, e.g. D5's SHIELD box) was planned alongside this but
+never wired into the localization path that shipped — removed rather than
+kept as unreferenced dead code; `dash_close_kernel` is gone from
+LocalizeConfig for the same reason. Dashed-boundary handling remains a
+real, open limitation (docs/01), just not addressed by this function."""
 from __future__ import annotations
 
 import cv2
 import numpy as np
 
 from edp.config import LocalizeConfig
-
-
-def close_dashed_boundaries(binary: np.ndarray, cfg: LocalizeConfig) -> np.ndarray:
-    """Dilate-then-erode with a kernel large enough to bridge dash gaps,
-    so a dashed rectangle becomes one closed contour instead of several
-    disconnected strokes."""
-    k = cfg.dash_close_kernel
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-    return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
 
 
 def thick_symbol_mask(binary: np.ndarray, cfg: LocalizeConfig) -> np.ndarray:

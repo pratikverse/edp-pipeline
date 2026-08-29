@@ -11,7 +11,6 @@ preprocess:
 localize:
   min_component_area: 80
   max_component_area: 40000
-  dash_close_kernel: 5        # morphological closing kernel size, dashed boundaries
   thin_stroke_max_width: 4    # px; used only for the wire/symbol area-fraction kind hint
   density_window: 25          # px; box-filter window for skeleton corner/endpoint density
   density_threshold: 3        # min interest points in window to seed a symbol region

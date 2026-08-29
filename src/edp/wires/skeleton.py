@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 from skimage.morphology import skeletonize
 
-from edp.types import BBox, Symbol
+from edp.types import Symbol
 
 
 def subtract_symbols(binary: np.ndarray, symbols: list[Symbol], pad: int = 2) -> np.ndarray:
@@ -25,20 +25,3 @@ def skeletonize_wires(wire_mask: np.ndarray) -> np.ndarray:
     bool_mask = wire_mask > 0
     thin = skeletonize(bool_mask)
     return (thin.astype(np.uint8)) * 255
-
-
-def skeleton_graph_nodes(skeleton: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Returns (endpoints, branch_points) as Nx2 pixel-coordinate arrays.
-
-    A pixel's 8-neighbour count in the skeleton classifies it:
-    1 neighbour -> endpoint, 3+ neighbours -> branch/junction point.
-    """
-    from scipy.ndimage import convolve
-
-    binary = (skeleton > 0).astype(np.uint8)
-    kernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])
-    neighbor_count = convolve(binary, kernel, mode="constant", cval=0) * binary
-
-    endpoints = np.column_stack(np.where(neighbor_count == 1))
-    branch_points = np.column_stack(np.where(neighbor_count >= 3))
-    return endpoints, branch_points

@@ -19,7 +19,6 @@ class PreprocessConfig(BaseModel):
 class LocalizeConfig(BaseModel):
     min_component_area: int = 80
     max_component_area: int = 40000
-    dash_close_kernel: int = 5
     thin_stroke_max_width: int = 4
     density_window: int = 25
     density_threshold: int = 3
