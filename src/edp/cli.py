@@ -46,27 +46,33 @@ def _cmd_run(args: argparse.Namespace) -> None:
 
 
 def _cmd_build_library(args: argparse.Namespace) -> None:
-    import numpy as np
-
-    from edp.classify.library import ReferenceLibrary
+    from edp.classify.library import ReferenceLibrary, _cache_signature, _save_cache
 
     cfg = Config.load(args.config)
-    library = ReferenceLibrary.build(args.reference_dir, cfg.classify)
+    reference_dir = Path(args.reference_dir)
+    out_path = Path(args.out)
+    # ReferenceLibrary.build() now auto-caches to <reference_dir>/index.npz
+    # on any miss (see classify/library.py) -- this command mainly exists
+    # to (a) warm that cache ahead of time (e.g. in CI, before the first
+    # `edp run`) and (b) support writing the index to a different explicit
+    # path via --out. Passing cache_path=out_path makes both paths share
+    # one code path instead of this command hand-rolling its own npz
+    # writer with a different (missing-signature) schema, which would
+    # otherwise silently invalidate itself on the very next `edp run`.
+    library = ReferenceLibrary.build(reference_dir, cfg.classify, cache_path=out_path)
     print(f"[edp] built library with {len(library)} entries")
 
-    out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     if len(library) == 0:
         print("[edp] warning: empty library (no images under reference_dir)")
         return
-    np.savez(
-        out_path,
-        embeddings=library._matrix,
-        class_names=[e.class_name for e in library.entries],
-        rotations=[e.rotation for e in library.entries],
-        mirrored=[e.mirrored for e in library.entries],
-        source_paths=[e.source_path for e in library.entries],
-    )
+    if not out_path.exists():
+        # build() only writes the cache on a miss; if --out already held a
+        # valid cache (identical signature) nothing needed writing, but an
+        # explicit `edp build-library` call should still guarantee the
+        # file exists at the requested path.
+        signature = _cache_signature(reference_dir, cfg.classify)
+        meta = [(e.class_name, e.rotation, e.mirrored, e.source_path) for e in library.entries]
+        _save_cache(out_path, library._matrix, meta, signature)
     print(f"[edp] saved -> {out_path}")
 
 

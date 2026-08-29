@@ -3,6 +3,18 @@ rotation/mirror-augmented, embedded once and cached to disk. See
 docs/02_model_selection_rationale.md (rotation handling, style variants)
 and docs/07_project_layout.md (`edp build-library`).
 
+`build()` auto-caches the expensive part (the DINOv2 forward pass) to
+`<reference_dir>/index.npz`, keyed by a signature over every source file's
+path/mtime/size plus the embedding model name and rotation/mirror config
+— change any of those and the cache misses and rebuilds itself
+automatically, so there's no separate "did I remember to rebuild the
+index" step. Image loading and rotation/mirror augmentation still run on
+every call regardless (decoding and rotating a few dozen small PNGs is
+milliseconds; re-embedding all of them on every `edp run` invocation
+measured 60-85s once the library grew past ~250 entries — see docs/08
+section 1.3's "cost found along the way" note — which is what this cache
+actually avoids).
+
 Terminal templates (data/reference/<class>/<name>.terminals.json, produced
 by scripts/build_reference_from_kicad.py) are carried through the same
 rotation/mirror augmentation as the image, in normalised [0,1] crop
@@ -81,9 +93,12 @@ class ReferenceLibrary:
         return [(class_name, score, entry) for class_name, (score, entry) in ranked[:k]]
 
     @classmethod
-    def build(cls, reference_dir: str | Path, cfg: ClassifyConfig) -> "ReferenceLibrary":
+    def build(
+        cls, reference_dir: str | Path, cfg: ClassifyConfig, cache_path: str | Path | None = None
+    ) -> "ReferenceLibrary":
         """Scans reference_dir/<class_name>/*.png, augments each with the
-        configured rotations (and mirror), embeds, and returns the index.
+        configured rotations (and mirror), embeds (from cache when valid —
+        see module docstring), and returns the index.
 
         An empty or missing reference_dir yields an empty library — every
         candidate then falls out as "unknown" (see classify/match.py) rather
@@ -95,8 +110,8 @@ class ReferenceLibrary:
         reference_dir = Path(reference_dir)
         if not reference_dir.exists():
             return cls([])
+        cache_path = Path(cache_path) if cache_path is not None else reference_dir / "index.npz"
 
-        embedder = Embedder(cfg.model)
         crops: list[np.ndarray] = []
         meta: list[tuple[str, int, bool, str]] = []
         terminals_per_crop: list[list[TerminalTemplate]] = []
@@ -117,12 +132,86 @@ class ReferenceLibrary:
         if not crops:
             return cls([])
 
-        embeddings = embedder.embed(crops)
+        signature = _cache_signature(reference_dir, cfg)
+        embeddings = _load_cached_embeddings(cache_path, signature, meta)
+        if embeddings is None:
+            embedder = Embedder(cfg.model)
+            embeddings = embedder.embed(crops)
+            _save_cache(cache_path, embeddings, meta, signature)
+
         entries = [
             LibraryEntry(class_name=cn, rotation=rot, mirrored=mir, source_path=sp, embedding=emb, terminals=term)
             for (cn, rot, mir, sp), emb, term in zip(meta, embeddings, terminals_per_crop)
         ]
         return cls(entries)
+
+
+def _cache_signature(reference_dir: Path, cfg: ClassifyConfig) -> str:
+    """Hashes everything that would change the embeddings if it changed:
+    every source file's path/mtime/size under reference_dir (covers add,
+    remove, edit, or replace a reference image or its terminals sidecar),
+    plus the embedding model name and rotation/mirror settings (changing
+    either changes what gets fed to the embedder). Anything else in
+    ClassifyConfig (thresholds, paths unrelated to the library) doesn't
+    affect what's embedded, so isn't part of the signature — a change
+    there shouldn't force a needless re-embed."""
+    import hashlib
+
+    files = sorted(
+        p for p in reference_dir.rglob("*") if p.is_file() and p.suffix in (".png", ".json") and p.name != "index.npz"
+    )
+    parts = [f"model={cfg.model}", f"rotations={sorted(cfg.rotations)}", f"mirror={cfg.mirror}"]
+    for p in files:
+        stat = p.stat()
+        parts.append(f"{p.relative_to(reference_dir).as_posix()}:{stat.st_mtime_ns}:{stat.st_size}")
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+def _load_cached_embeddings(
+    cache_path: Path, signature: str, expected_meta: list[tuple[str, int, bool, str]]
+) -> np.ndarray | None:
+    """Returns cached embeddings only if the signature matches (nothing in
+    the reference dir or embedding config changed) AND the cached entry
+    order/identity matches exactly what this build pass just enumerated —
+    the second check is redundant with the signature in practice (a
+    changed file set changes the signature too) but is cheap and makes the
+    "never silently serve embeddings for the wrong crop" guarantee
+    explicit rather than assumed."""
+    if not cache_path.exists():
+        return None
+    try:
+        data = np.load(cache_path, allow_pickle=False)
+        if "signature" not in data.files or str(data["signature"]) != signature:
+            return None
+        cached_meta = list(
+            zip(
+                [str(x) for x in data["class_names"]],
+                [int(x) for x in data["rotations"]],
+                [bool(x) for x in data["mirrored"]],
+                [str(x) for x in data["source_paths"]],
+            )
+        )
+        if cached_meta != expected_meta:
+            return None
+        return data["embeddings"]
+    except Exception:
+        # Any read/format problem (corrupt file, older cache schema, etc.)
+        # -- fall back to a full rebuild rather than raising, same
+        # "degrade gracefully" precedent as the missing-reference-dir case.
+        return None
+
+
+def _save_cache(cache_path: Path, embeddings: np.ndarray, meta: list[tuple[str, int, bool, str]], signature: str) -> None:
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        cache_path,
+        embeddings=embeddings,
+        class_names=[m[0] for m in meta],
+        rotations=[m[1] for m in meta],
+        mirrored=[m[2] for m in meta],
+        source_paths=[m[3] for m in meta],
+        signature=signature,
+    )
 
 
 def _load_terminals(img_path: Path) -> list[tuple[str, tuple[int, int], tuple[int, int]]]:
