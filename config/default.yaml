@@ -39,7 +39,12 @@ classify:
   mirror: true
   unknown_similarity_threshold: 0.62
   reference_dir: data/reference
-  yolo_fusion_confidence_threshold: 0.5  # prefer YOLO's class over DINOv2's on disagreement above this
+  # Evidence-fusion weights (classify/evidence.py, classify/match.py). Empty ->
+  # code defaults (yolo 1.2, dinov2 1.0, text_prior 1.0). Override individual
+  # sources here, e.g. `evidence_weights: {text_prior: 1.5}`.
+  evidence_weights: {}
+  reference_designators_path: config/reference_designators.yaml
+  ambiguity_margin_threshold: 0.15  # reserved for confusion-pair specialist routing (unused until one exists)
 
 text:
   upscale_factor: 3

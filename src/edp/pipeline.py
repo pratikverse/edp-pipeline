@@ -19,7 +19,7 @@ from edp.localize.proposals import find_candidates
 from edp.preprocess.binarize import binarize, to_grayscale
 from edp.preprocess.deskew import deskew
 from edp.preprocess.layers import blue_layer_mask
-from edp.text.associate import associate_tokens
+from edp.text.associate import associate_tokens, nearby_token_text
 from edp.text.ocr import run_ocr
 from edp.types import DrawingResult
 from edp.validate.checks import validate
@@ -81,7 +81,15 @@ def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResul
     with _stage("classify"):
         library = ReferenceLibrary.build(cfg.classify.reference_dir, cfg.classify)
         embedder = Embedder(cfg.classify.model)
-        symbols = classify_candidates(img_rgb, candidates, library, cfg.classify, embedder)
+        # Classification runs before the final text-association stage (see
+        # above), but the OCR text-prior evidence source (classify/text_prior.py)
+        # still needs to know what's written near each candidate. Reuses the
+        # exact same "nearest tokens within max_association_distance" logic
+        # associate_tokens uses for symbol.ocr_text_raw, just applied to
+        # candidate boxes instead of classified symbols — see
+        # text/associate.py's nearby_token_text docstring.
+        ocr_hints = [nearby_token_text(c.bbox, tokens, cfg.text) for c in candidates]
+        symbols = classify_candidates(img_rgb, candidates, library, cfg.classify, embedder, ocr_hints=ocr_hints)
 
     with _stage("text_associate"):
         symbols = associate_tokens(symbols, tokens, cfg.text)

@@ -60,6 +60,26 @@ class ReferenceLibrary:
             return None, 0.0
         return self.entries[int(indices[0])], float(scores[0])
 
+    def match_topk(self, embedding: np.ndarray, k: int = 3, search_k: int = 20) -> list[tuple[str, float, "LibraryEntry"]]:
+        """Top-k *distinct classes* by best cosine similarity, for the
+        top-k-aware fusion in classify/match.py. `search_k` over-fetches
+        raw neighbours before collapsing to classes, since the library
+        holds many rotation/mirror-augmented entries per class — without
+        over-fetching, the top few raw hits can all be the same class's
+        augmented variants and starve genuinely distinct candidates out of
+        the top-k entirely."""
+        if len(self.entries) == 0:
+            return []
+        indices, scores = self._index.search(embedding, k=min(search_k, len(self.entries)))
+        best_per_class: dict[str, tuple[float, LibraryEntry]] = {}
+        for idx, score in zip(indices, scores):
+            entry = self.entries[int(idx)]
+            current = best_per_class.get(entry.class_name)
+            if current is None or score > current[0]:
+                best_per_class[entry.class_name] = (float(score), entry)
+        ranked = sorted(best_per_class.items(), key=lambda kv: kv[1][0], reverse=True)
+        return [(class_name, score, entry) for class_name, (score, entry) in ranked[:k]]
+
     @classmethod
     def build(cls, reference_dir: str | Path, cfg: ClassifyConfig) -> "ReferenceLibrary":
         """Scans reference_dir/<class_name>/*.png, augments each with the

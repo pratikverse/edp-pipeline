@@ -11,6 +11,20 @@ _ID_RE = re.compile(r"^([A-Za-z]{1,4}\d{1,3})$")
 _VALUE_RE = re.compile(r"^\d+(\.\d+)?\s*[a-zA-Zµ]*$")
 
 
+def nearby_token_text(bbox: BBox, tokens: list[TextToken], cfg: TextConfig, limit: int = 3) -> str:
+    """The same "closest tokens within max_association_distance, joined"
+    logic `associate_tokens` uses for `symbol.ocr_text_raw`, exposed for
+    any bbox (not just an already-classified Symbol's). Used by
+    classify/text_prior.py to get OCR evidence *before* classification has
+    produced a Symbol — pipeline.py calls this once per candidate ahead of
+    the classify stage. Single source of truth for "which tokens count as
+    near this box," so the pre-classification hint and the final
+    `ocr_text_raw` never disagree about what's nearby."""
+    nearby = [t for t in tokens if _distance(bbox, t.bbox) <= cfg.max_association_distance]
+    nearby.sort(key=lambda t: _distance(bbox, t.bbox))
+    return " ".join(t.text for t in nearby[:limit])
+
+
 def associate_tokens(symbols: list[Symbol], tokens: list[TextToken], cfg: TextConfig) -> list[Symbol]:
     """Mutates and returns `symbols` with ocr_text_raw/value/id assigned
     from the nearest token within max_association_distance.
@@ -24,10 +38,9 @@ def associate_tokens(symbols: list[Symbol], tokens: list[TextToken], cfg: TextCo
     each id token at most once.
     """
     for symbol in symbols:
-        nearby = [t for t in tokens if _distance(symbol.bbox, t.bbox) <= cfg.max_association_distance]
-        if nearby:
-            nearby.sort(key=lambda t: _distance(symbol.bbox, t.bbox))
-            symbol.ocr_text_raw = " ".join(t.text for t in nearby[:3])
+        text = nearby_token_text(symbol.bbox, tokens, cfg)
+        if text:
+            symbol.ocr_text_raw = text
 
     _assign_ids_greedily(symbols, tokens, cfg)
     _assign_values(symbols, tokens, cfg)

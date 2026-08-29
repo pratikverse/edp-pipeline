@@ -44,11 +44,19 @@ class ClassifyConfig(BaseModel):
     mirror: bool = True
     unknown_similarity_threshold: float = 0.62
     reference_dir: str = "data/reference"
-    # Fusion policy (docs/08_improvement_plan.md 2.1): when YOLO's own class
-    # prediction disagrees with the DINOv2+FAISS match, prefer YOLO's if its
-    # confidence clears this bar (it's supervised and in-domain), else fall
-    # back to DINOv2. Below both bars -> Unknown.
-    yolo_fusion_confidence_threshold: float = 0.5
+    # Evidence-fusion architecture (docs/08_improvement_plan.md, classify/evidence.py):
+    # each source (yolo, dinov2, text_prior) contributes weight * confidence * score
+    # per class; these are the per-source base weights. See classify/match.py's
+    # DEFAULT_EVIDENCE_WEIGHTS for the rationale behind the yolo/dinov2 split.
+    # Empty here means "use the code defaults" — set entries to override individually.
+    evidence_weights: dict[str, float] = {}
+    # OCR reference-designator / part-number prior table (classify/text_prior.py).
+    reference_designators_path: str = "config/reference_designators.yaml"
+    # Below this top-1/top-2 fusion margin, a candidate is "ambiguous" — reserved
+    # for confusion-pair geometry specialist routing (docs/08), unused until one
+    # exists; kept here now so the threshold is configurable from day one rather
+    # than added later as a breaking config change.
+    ambiguity_margin_threshold: float = 0.15
 
 
 class TextConfig(BaseModel):

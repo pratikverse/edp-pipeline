@@ -68,6 +68,16 @@ class Symbol:
     terminals: list[Terminal] = field(default_factory=list)
     label_source: LabelSource = "classification"
     ocr_text_raw: Optional[str] = None
+    # Evidence-fusion output (classify/evidence.py), for explainability and
+    # ambiguity routing — not part of the trimmed 4-field JSON schema
+    # (emit/json_out.py), only the extended debug view. `top_k` is
+    # (class_name, fused_score) sorted descending; `margin` is top-1 minus
+    # top-2 on a 0-1 scale (1.0 when only one candidate had any evidence).
+    # `evidence_trace` is {source_name: {class_scores, confidence, weight,
+    # metadata}} — literally what each source said and how much it counted.
+    top_k: list[tuple[str, float]] = field(default_factory=list)
+    margin: float = 1.0
+    evidence_trace: dict = field(default_factory=dict)
 
 
 @dataclass

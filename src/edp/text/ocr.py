@@ -2,11 +2,37 @@
 and docs/02 (why upscaling is the dominant lever at this resolution)."""
 from __future__ import annotations
 
+import os
+import sys
+from pathlib import Path
+
 import cv2
 import numpy as np
 
 from edp.config import TextConfig
 from edp.types import TextToken
+
+
+def _ensure_tessdata_prefix() -> None:
+    """The conda-forge `tesseract` package (this project's local install)
+    doesn't register TESSDATA_PREFIX itself, and without it Tesseract
+    fails closed -- not with an exception (pytesseract's own try/except
+    below swallows it), but by silently returning zero tokens, which
+    quietly degrades every OCR-dependent stage (id assignment, and the
+    text_prior classification evidence) without any visible error. Same
+    "set the env var defensively rather than requiring activation" pattern
+    already used for the MKL/OpenMP conflict in classify/embedder.py.
+    Only sets it if unset and a real tessdata dir is found — never
+    overrides an explicit environment choice."""
+    if os.environ.get("TESSDATA_PREFIX"):
+        return
+    for candidate in (
+        Path(sys.prefix) / "share" / "tessdata",
+        Path(sys.prefix) / "Library" / "share" / "tessdata",
+    ):
+        if (candidate / "eng.traineddata").exists():
+            os.environ["TESSDATA_PREFIX"] = str(candidate)
+            return
 
 _ROT_CODE = {
     90: cv2.ROTATE_90_CLOCKWISE,
@@ -27,6 +53,8 @@ def run_ocr(gray: np.ndarray, cfg: TextConfig) -> list[TextToken]:
         import pytesseract
     except ImportError:
         return []
+
+    _ensure_tessdata_prefix()
 
     h, w = gray.shape[:2]
     upscaled = cv2.resize(
