@@ -117,9 +117,36 @@ in this document above came from either synthetic mAP (which doesn't reflect rea
 performance) or manual eyeballing. That is not a production footing, and it means we
 cannot tell whether any change below actually helps.
 
-### 0.1 Golden evaluation set — *~4h*
+### 0.1 Golden evaluation set — *D4 done 2026-08-29, D5 done 2026-08-30, 15/50 not started*
 Hand-label D4, D5, and 15 of the 50 samples (17 drawings) with ground-truth boxes,
 types, and connections. Store as `data/golden/<name>.json`.
+
+**D5's golden set surfaced an important, honest finding worth recording before
+anything else in this document: classification accuracy on D5 is 30.8% (4/13),
+vs. D4's 81.2% after the full evidence-fusion architecture (OCR prior + geometry
+specialists + linear probe, see 1.1-1.4). Combined across both real drawings:
+58.6% (17/29), not the 81.2% D4-only headline.** This is exactly the "tuned to
+one golden set, doesn't generalize" risk the architecture work was implicitly
+running the whole time — D4 was the *only* real ground truth in the loop while
+every threshold, routing rule, and weight in `classify/` was being iterated on.
+
+Root-caused, not just observed: D5's real component labels (`R5`, `C8`, `T1`)
+are clearly legible to a human eye but Tesseract reads them as garbage
+(`"2 an o"`, `"| wo. an"`) on this drawing's specific font/rendering — so
+`text_prior` silently contributes nothing on D5 even on cases it should trivially
+resolve, unlike D4 where the OCR-illegible cases (`SYM_004`, `SYM_012`) are
+genuinely hard crops, not readable-but-misread ones. DINOv2 and the linear probe
+are also independently weaker on D5's specific rendering of resistors,
+transformers, and capacitors even where the reference library nominally covers
+the class and style. See `data/golden/D5.json`'s `_notes` and
+`_excluded_false_positives` for the full detail, including three detections that
+turned out to be a non-component drawing glyph (an output bracket/arrow) rather
+than an electronic symbol at all — a failure mode D4 didn't have any example of.
+
+**Practical upshot:** OCR-quality robustness (upscale tuning, alternate PSM
+modes) is now a *measured*, not assumed, next lever — it's the most direct fix
+for D5's specific failure mode and doesn't require touching the fusion
+architecture at all.
 
 Use an existing tool (Label Studio / labelImg → YOLO format → convert) rather than
 building a labeller.
