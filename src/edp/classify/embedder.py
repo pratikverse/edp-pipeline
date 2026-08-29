@@ -34,10 +34,12 @@ def _load_model(model_name: str):
         "dinov2_vitb14": "facebook/dinov2-base",
     }.get(model_name, model_name)
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     processor = AutoImageProcessor.from_pretrained(hf_id)
     model = AutoModel.from_pretrained(hf_id)
     model.eval()
-    return processor, model, torch
+    model.to(device)
+    return processor, model, torch, device
 
 
 def _pad_to_square(crop: np.ndarray, fill: int = 255) -> np.ndarray:
@@ -75,13 +77,14 @@ class Embedder:
             dim = _EMBEDDING_DIMS.get(self.model_name, 768)
             return np.zeros((0, dim), dtype=np.float32)
 
-        processor, model, torch = _load_model(self.model_name)
+        processor, model, torch, device = _load_model(self.model_name)
         squared = [_pad_to_square(c) for c in crops]
         inputs = processor(images=squared, return_tensors="pt")
+        inputs = {k: v.to(device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = model(**inputs)
         # CLS token pooled output as the crop-level embedding.
-        embeddings = outputs.last_hidden_state[:, 0, :].numpy()
+        embeddings = outputs.last_hidden_state[:, 0, :].cpu().numpy()
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
         return (embeddings / norms).astype(np.float32)
