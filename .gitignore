@@ -17,3 +17,4 @@ data/synth*/
 data/validation_kicad_topology/
 *.pt
 debug_*.png
+runs/

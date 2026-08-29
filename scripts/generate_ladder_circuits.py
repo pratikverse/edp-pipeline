@@ -187,6 +187,9 @@ def main() -> None:
         "\n".join(
             [
                 f"path: {out_dir.as_posix()}",
+                # ultralytics requires both keys even for a validation-only set;
+                # 'train' is never actually used since we only call model.val().
+                "train: images",
                 "val: images",
                 f"names: {class_names}",
             ]
