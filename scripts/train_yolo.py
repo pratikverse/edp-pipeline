@@ -1,12 +1,14 @@
 """Trains a YOLOv8n detector on the synthetic dataset from
-generate_synthetic_dataset.py. CPU-only environment (no CUDA), so this
-uses the smallest model and a modest epoch count to stay tractable —
-see docs/02_model_selection_rationale.md for the rationale entry once
-this is folded into the pipeline.
+generate_synthetic_dataset.py / generate_ladder_circuits.py. Uses GPU
+(CUDA) automatically when available — the first two training runs in this
+project's history were CPU-only (~3.2-3.5h for 40 epochs on ~600-700
+images); a CUDA-enabled torch install cuts this dramatically. See
+docs/02_model_selection_rationale.md.
 
 Usage:
     python scripts/train_yolo.py --epochs 40
     python scripts/train_yolo.py --data data/synth_dense/data.yaml --name symbol_detector_dense
+    python scripts/train_yolo.py --device cpu   # force CPU even if a GPU is available
 """
 from __future__ import annotations
 
@@ -32,7 +34,15 @@ def main() -> None:
     parser.add_argument("--batch", type=int, default=16)
     parser.add_argument("--data", type=str, default="data/synth/data.yaml")
     parser.add_argument("--name", type=str, default="symbol_detector")
+    parser.add_argument("--device", type=str, default=None, help="'0' for first GPU, 'cpu' to force CPU; auto-detects if omitted")
     args = parser.parse_args()
+
+    import torch
+
+    device = args.device
+    if device is None:
+        device = "0" if torch.cuda.is_available() else "cpu"
+    print(f"[train] device={device}" + (f" ({torch.cuda.get_device_name(0)})" if device != "cpu" else ""))
 
     data_yaml = REPO_ROOT / args.data
     model = YOLO("yolov8n.pt")
@@ -41,7 +51,7 @@ def main() -> None:
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch,
-        device="cpu",
+        device=device,
         project=str(REPO_ROOT / "outputs" / "yolo_runs"),
         name=args.name,
         patience=15,
