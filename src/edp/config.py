@@ -69,7 +69,19 @@ class TextConfig(BaseModel):
     upscale_factor: int = 3
     orientations: list[int] = [0, 90, 270]
     max_association_distance: int = 45
-    tesseract_config: str = "--psm 11"
+    # Multiple Tesseract configs run per orientation and merged (dedup by
+    # bbox overlap, highest-confidence token kept) rather than one config
+    # picked as "the" answer. Measured empirically (docs/08 section 0.1 /
+    # OCR robustness follow-up): no single PSM mode wins on both D4 and D5
+    # -- PSM 12 helps D4, PSM 6 with the dictionary disabled helps D5 more,
+    # merging strictly beats either alone on both (D4 7->8, D5 2->4 known
+    # designators recovered) since a real drawing's OCR difficulty varies
+    # by font/rendering in ways no single config generalizes across.
+    tesseract_configs: list[str] = [
+        "--psm 11",
+        "--psm 12",
+        "--psm 6 -c load_system_dawg=0 -c load_freq_dawg=0",
+    ]
 
 
 class WiresConfig(BaseModel):

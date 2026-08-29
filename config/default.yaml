@@ -51,7 +51,12 @@ text:
   upscale_factor: 3
   orientations: [0, 90, 270]
   max_association_distance: 45
-  tesseract_config: "--psm 11"
+  # Merged multi-pass OCR (docs/08 section 0.1 follow-up): no single PSM mode
+  # wins on both D4 and D5's fonts/renderings, merging does. See config.py.
+  tesseract_configs:
+    - "--psm 11"
+    - "--psm 12"
+    - "--psm 6 -c load_system_dawg=0 -c load_freq_dawg=0"
 
 wires:
   junction_dot_min_radius: 2

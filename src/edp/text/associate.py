@@ -11,10 +11,17 @@ _ID_RE = re.compile(r"^([A-Za-z]{1,4}\d{1,3})$")
 _VALUE_RE = re.compile(r"^\d+(\.\d+)?\s*[a-zA-Zµ]*$")
 
 
-def nearby_token_text(bbox: BBox, tokens: list[TextToken], cfg: TextConfig, limit: int = 3) -> str:
+def nearby_token_text(bbox: BBox, tokens: list[TextToken], cfg: TextConfig, limit: int = 6) -> str:
     """The same "closest tokens within max_association_distance, joined"
     logic `associate_tokens` uses for `symbol.ocr_text_raw`, exposed for
-    any bbox (not just an already-classified Symbol's). Used by
+    any bbox (not just an already-classified Symbol's). limit=6, not 3:
+    OCR now runs multiple Tesseract configs per orientation and doesn't
+    dedup them (see text/ocr.py's run_ocr docstring) since picking a
+    single "winning" reading measurably lost real designators — so a
+    handful of near-identical readings of the same physical label
+    commonly occupy the nearest few slots, and a limit of 3 could crowd
+    out a second, genuinely different nearby label (e.g. a value string
+    next to a designator) entirely. Used by
     classify/text_prior.py to get OCR evidence *before* classification has
     produced a Symbol — pipeline.py calls this once per candidate ahead of
     the classify stage. Single source of truth for "which tokens count as

@@ -61,16 +61,28 @@ def run_ocr(gray: np.ndarray, cfg: TextConfig) -> list[TextToken]:
         gray, (w * cfg.upscale_factor, h * cfg.upscale_factor), interpolation=cv2.INTER_LANCZOS4
     )
 
+    # No dedup across the multiple configs/orientations, deliberately: a
+    # first attempt greedily kept only the highest-confidence reading per
+    # overlapping bbox, and it *lost* accuracy on D4 (the correct "$1"->"S1"
+    # reading for a switch's designator was crowded out by a higher-
+    # confidence but wrong reading of the same region from a different PSM
+    # pass) -- Tesseract's confidence score for short, garbled, technical
+    # tokens isn't a reliable "which reading is right" signal. Passing every
+    # reading through and letting text/associate.py's nearest-token join
+    # naturally surface duplicates of the correct reading (which then simply
+    # confirms itself, redundantly but harmlessly) measured better than
+    # picking a single "winner" per region.
     tokens: list[TextToken] = []
     for orientation in cfg.orientations:
         rotated = _rotate(upscaled, orientation)
-        try:
-            data = pytesseract.image_to_data(
-                rotated, config=cfg.tesseract_config, output_type=pytesseract.Output.DICT
-            )
-        except Exception:
-            continue
-        tokens.extend(_extract_tokens(data, rotated.shape, orientation, upscaled.shape, cfg.upscale_factor))
+        for tesseract_config in cfg.tesseract_configs:
+            try:
+                data = pytesseract.image_to_data(
+                    rotated, config=tesseract_config, output_type=pytesseract.Output.DICT
+                )
+            except Exception:
+                continue
+            tokens.extend(_extract_tokens(data, rotated.shape, orientation, upscaled.shape, cfg.upscale_factor))
     return tokens
 
 

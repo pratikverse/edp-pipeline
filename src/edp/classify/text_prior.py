@@ -85,7 +85,22 @@ def evidence_from_text(raw_text: str | None, cfg_path: str = "config/reference_d
     is far more specific evidence than a one-letter prefix, so it wins
     when both are present in the same token (e.g. "T2BC547" matches
     designator "T" -- deliberately absent from the table, see the yaml
-    comment -- and part family "BC547" -> BJT_NPN)."""
+    comment -- and part family "BC547" -> BJT_NPN).
+
+    `raw_text` is frequently several distinct OCR readings joined with
+    spaces (text/associate.py's nearby_token_text gathers several nearby
+    tokens, and since text/ocr.py's run_ocr runs multiple Tesseract
+    configs per orientation without deduplicating -- see its docstring --
+    some of those readings are noise fragments from a different config
+    pass reading the same physical label badly). Part-number matching
+    searches the whole normalised blob (a substring search doesn't care
+    about leading junk), but designator matching checks each
+    whitespace-separated token independently rather than the joined blob:
+    an early version normalised-then-matched the *whole* joined string,
+    which anchors at its start (`_DESIGNATOR_RE.match`) -- one junk
+    fragment before the real reading ("= ae R6 R6 R6 R6" -> "=AER6...")
+    was enough to silently defeat a correct, unambiguous "R6" sitting
+    right next to it. Checking token-by-token is immune to that."""
     if not raw_text or not raw_text.strip():
         return no_evidence("text_prior", reason="no_ocr_text")
 
@@ -101,32 +116,36 @@ def evidence_from_text(raw_text: str | None, cfg_path: str = "config/reference_d
                 metadata={"level": EvidenceLevel.EXACT_PART_NUMBER, "raw_text": raw_text, "normalized": normalized},
             )
 
-    match = _DESIGNATOR_RE.match(normalized)
-    if match:
+    for raw_token in raw_text.split():
+        token_normalized = normalize_ocr_text(raw_token)
+        match = _DESIGNATOR_RE.match(token_normalized)
+        if not match:
+            continue
         prefix = match.group(1)
         # Longest matching prefix wins ("BATT" over "B", "XTAL" over "X")
         # so a longer, more specific designator isn't shadowed by a short
         # one that happens to also be a valid prefix.
         candidates = [p for p in table.designators if prefix.startswith(p)]
-        if candidates:
-            best = max(candidates, key=len)
-            return ClassificationEvidence(
-                source="text_prior",
-                class_scores=dict(table.designators[best]),
-                confidence=0.55,
-                metadata={
-                    "level": EvidenceLevel.DESIGNATOR,
-                    "raw_text": raw_text,
-                    "normalized": normalized,
-                    "designator": best,
-                },
-            )
-        # A designator-shaped token whose prefix isn't in the table at all
-        # (e.g. "U1", "TP2") — genuinely nothing to say, not a match to
-        # force. Falls through to the ambiguous return below.
+        if not candidates:
+            # A designator-shaped token whose prefix isn't in the table at
+            # all (e.g. "U1", "TP2") — genuinely nothing to say about
+            # *this* token; keep checking the rest rather than giving up.
+            continue
+        best = max(candidates, key=len)
+        return ClassificationEvidence(
+            source="text_prior",
+            class_scores=dict(table.designators[best]),
+            confidence=0.55,
+            metadata={
+                "level": EvidenceLevel.DESIGNATOR,
+                "raw_text": raw_text,
+                "matched_token": raw_token,
+                "designator": best,
+            },
+        )
 
-    # No part-number hit and no recognised designator prefix -- garbled
-    # OCR, a value string ("10K", "220R"), or an id we don't model
+    # No part-number hit and no token matched a recognised designator --
+    # garbled OCR, a value string ("10K", "220R"), or an id we don't model
     # ("TP2"). Per docs/08's gating rule, this is ignored rather than
     # treated as weak evidence: never let unparseable OCR vote at all.
     return no_evidence("text_prior", reason=EvidenceLevel.AMBIGUOUS, raw_text=raw_text, normalized=normalized)

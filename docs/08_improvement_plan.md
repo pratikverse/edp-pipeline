@@ -148,6 +148,37 @@ modes) is now a *measured*, not assumed, next lever — it's the most direct fix
 for D5's specific failure mode and doesn't require touching the fusion
 architecture at all.
 
+**Follow-up 2026-08-30 — done, general (not D4/D5-specific):** measured every
+combination of Tesseract PSM mode (11/12/6+dictionary-disabled) x upscale
+factor (3/4/5) against known designators in *both* drawings before changing
+anything. No single config won on both — PSM 12 helped D4, PSM 6 with the
+dictionary disabled helped D5 more, and upscale 3 (current) beat 4 and 5 on
+the combined total. **Merging all three configs' raw output (not picking a
+winner) strictly beat every individual config on both drawings** (D4 known-
+designator recall 7/13->8/13, D5 2/12->4/12) — implemented as
+`TextConfig.tesseract_configs` (a list, run every orientation x every config,
+`text/ocr.py`).
+
+First implementation also deduplicated overlapping readings by keeping the
+highest-confidence one, which *lost* accuracy on D4 (a correct "$1"->"S1"
+switch-designator reading was crowded out by a higher-confidence but wrong
+reading of the same region from a different PSM pass — Tesseract's confidence
+isn't a reliable "which reading is right" signal for short garbled technical
+tokens). Reverted the dedup; kept every reading, relying on
+`text/associate.py`'s nearest-token join to naturally surface the correct one
+redundantly. That in turn surfaced a second, pre-existing latent bug in
+`classify/text_prior.py`: designator matching normalised-then-matched the
+*whole* joined multi-token string, anchored at its start — one leading junk
+fragment ("= ae R6 R6 R6 R6" -> "=AER6...") was enough to silently defeat a
+correct, unambiguous "R6" sitting right next to it. Fixed to check each
+whitespace-separated token independently instead.
+
+**Result (measured, `edp eval` on D4+D5 combined):** classification accuracy
+62.1% -> 65.5% (18/29 -> 19/29). D4 unchanged at 81.2% (verified no
+regression after the dedup revert + text_prior fix); D5 38.5% -> 46.2% (one
+more symbol fixed, `SYM_007`/S1 switch, zero new errors). Session total:
+56.2% -> 65.5% combined-drawing classification accuracy.
+
 Use an existing tool (Label Studio / labelImg → YOLO format → convert) rather than
 building a labeller.
 
