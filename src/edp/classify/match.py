@@ -22,6 +22,13 @@ no scores) rather than being forced to guess:
     an exact part number is near-authoritative, a bare designator is a
     moderate vote, unparseable OCR contributes nothing at all.
 
+A fourth source, geometry (classify/specialists.py), only joins the vote
+when the first three leave the result thin between two-or-more candidates
+that fall inside one specialist's known confusion group (Battery vs
+Capacitor(_Polarized), or BJT vs Potentiometer) — never on every symbol,
+since it's the slowest source and only useful when there's a real
+ambiguity for it to resolve.
+
 The historical D4 numbers motivating this (docs/08 section 2.1): YOLO
 ~10/16 correct, DINOv2 ~7/16, on largely non-overlapping error sets — so
 combining beats trusting either alone, and OCR closes several of the
@@ -41,6 +48,7 @@ from edp.types import Candidate, Symbol, Terminal
 from .embedder import Embedder
 from .evidence import ClassificationEvidence, fuse_evidence, no_evidence
 from .library import LibraryEntry, ReferenceLibrary
+from .specialists import CONFUSION_GROUPS, select_specialist
 from .text_prior import evidence_from_text
 
 UNKNOWN_TYPE = "Unknown"
@@ -55,6 +63,14 @@ DEFAULT_EVIDENCE_WEIGHTS = {
     "yolo": 1.2,
     "dinov2": 1.0,
     "text_prior": 1.0,
+    # Geometry specialists' own `confidence` field already encodes how sure
+    # a given reading is (0.55-0.85 depending on which rule fired -- see
+    # classify/specialists.py) -- base weight stays 1.0, same as the other
+    # sources, so a weak geometry reading doesn't get an extra thumb on the
+    # scale beyond what its own confidence already earns it.
+    "geometry:battery_capacitor": 1.0,
+    "geometry:bjt_potentiometer": 1.0,
+    "geometry:npn_pnp": 1.0,
 }
 
 
@@ -105,6 +121,46 @@ def _find_entry_for_class(library: ReferenceLibrary, class_name: str) -> Library
             return entry
         fallback = fallback or entry
     return fallback
+
+
+def _select_ambiguous_specialist(fusion_candidates: list[tuple[str, float]]):
+    """Whether fusion's own result is "ambiguous" for specialist-routing
+    purposes, and if so, which specialist to call.
+
+    The architecture doc's original routing idea was a literal top-1-vs-
+    top-2 margin threshold. Measured against D4, that under-fired on every
+    real case it was meant to catch:
+
+      - SYM_006 (Battery): YOLO alone voted Capacitor_Polarized at high
+        enough weighted confidence that the top-1/top-2 margin was 0.43 --
+        nowhere near "thin" -- despite the winning answer being wrong.
+        A confidently wrong answer is exactly when a second opinion is
+        *most* valuable, not least.
+      - SYM_013 (Capacitor_Polarized): the true class was 3rd by fused
+        score, edged out for 2nd place by an unrelated DINOv2 near-miss
+        (LED) that has nothing to do with the actual ambiguity.
+      - SYM_011 (BJT_NPN): DINOv2's own top-3 didn't contain BJT_NPN at
+        all (only YOLO voted for it, weakly) -- so even a "2 of top-3
+        belong to the same confusion group" check missed it, since only
+        one group member (Potentiometer, the wrong answer) was present.
+
+    So this checks the simplest thing that actually matches the intent --
+    "is the *winning* class one this project already knows is confusable"
+    -- and fires whenever fusion's own top-1 falls in a known confusion
+    group, regardless of what else is nearby in the ranking or how large
+    the margin looks. This fires somewhat more often than a strict margin
+    check would (every Battery/Capacitor*/BJT*/Potentiometer top-1, not
+    just thin-margin ones), which is an acceptable trade against a
+    specialist that's cheap (a handful of OpenCV calls, no model inference)
+    and abstains cleanly when its own geometry doesn't support a call.
+    """
+    if not fusion_candidates:
+        return None
+    top1_class = fusion_candidates[0][0]
+    for group in CONFUSION_GROUPS:
+        if top1_class in group:
+            return select_specialist(group)
+    return None
 
 
 def _yolo_evidence(candidate: Candidate) -> ClassificationEvidence:
@@ -167,6 +223,19 @@ def classify_candidates(
         text_ev = evidence_from_text(hints[i], cfg.reference_designators_path)
 
         fusion = fuse_evidence([yolo_ev, dinov2_ev, text_ev], weights, unknown_type=UNKNOWN_TYPE)
+
+        # Ambiguity routing (docs/08 Phase 6): only reach for a geometry
+        # specialist when the top fused candidates fall inside one
+        # specialist's known confusion group — never on every symbol, and
+        # never on an ambiguity no specialist covers (the common case:
+        # most uncertain results aren't a *known* confusion pair at all).
+        # See _select_ambiguous_specialist for why this isn't a literal
+        # top-1-vs-top-2 margin check.
+        specialist = _select_ambiguous_specialist(fusion.candidates)
+        if specialist is not None:
+            geometry_ev = specialist(crops[i])
+            fusion = fuse_evidence([yolo_ev, dinov2_ev, text_ev, geometry_ev], weights, unknown_type=UNKNOWN_TYPE)
+
         symbol_type = fusion.top_class
         confidence = fusion.top_score
 
