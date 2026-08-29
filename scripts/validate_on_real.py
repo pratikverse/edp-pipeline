@@ -1,9 +1,12 @@
 """Runs the full edp pipeline (YOLO localizer + DINOv2/FAISS classify) over
-every image in data/validation/ — real circuit diagrams (D4, D5, plus the
-50 downloaded sample circuits), not synthetic composites. There is no
-ground-truth bounding-box labeling for these, so this produces overlays
-for manual visual audit, the same method used to evaluate D4/D5 throughout
-docs/02 and docs/05 — it does not compute an automated mAP.
+every image in data/validation/ — real circuit diagrams (D4, D5), not
+synthetic composites. D4/D5 now have hand-verified ground truth
+(data/golden/*.json) — prefer `edp eval` for a real accuracy number on
+them; this script's visual-audit overlays are for any additional
+real drawings dropped into data/validation/ without ground truth yet
+(data/validation/ previously also held 50 downloaded sample circuits,
+evaluated only this way since no ground truth existed for them; removed
+2026-08-30, see docs/07).
 
 Usage:
     python scripts/validate_on_real.py

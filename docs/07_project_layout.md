@@ -57,12 +57,13 @@ electrical-drawing-pipeline/
 │   │                          # NOT a substitute for real validation (see docs/02): same
 │   │                          # generation distribution as training, so it only confirms
 │   │                          # in-distribution generalization, not real-world transfer
-│   ├── validation/            # REAL circuit diagrams for actual validation: D4, D5, plus
-│   │                           # 50 downloaded sample circuits in a different drawing
-│   │                           # convention than KiCad's. No ground-truth boxes exist for
-│   │                           # these; evaluated by visual audit (validate_on_real.py).
-│   │                           # Tests topology-realism AND icon-style transfer together —
-│   │                           # a failure here doesn't say which one is at fault.
+│   ├── validation/            # REAL circuit diagrams: D4, D5 -- the two hand-verified
+│   │                           # golden-set drawings (data/golden/*.json). Previously also
+│   │                           # held 50 downloaded sample circuits in a different drawing
+│   │                           # convention than KiCad's, evaluated only by visual audit
+│   │                           # (no ground truth existed for them); removed 2026-08-30 as
+│   │                           # not close enough to D4/D5's style to be a useful
+│   │                           # like-for-like check, and unused/confusing sitting there.
 │   └── validation_kicad_topology/  # [experimental, gitignored] synthetic but topologically
 │                                    # realistic circuits (ladder network: rails + vertical
 │                                    # branches, junction dots — see generate_ladder_circuits.py)
