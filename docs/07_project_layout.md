@@ -57,16 +57,29 @@ electrical-drawing-pipeline/
 │   │                          # NOT a substitute for real validation (see docs/02): same
 │   │                          # generation distribution as training, so it only confirms
 │   │                          # in-distribution generalization, not real-world transfer
-│   └── validation/            # REAL circuit diagrams for actual validation: D4, D5, plus
-│                               # 50 downloaded sample circuits in a different drawing
-│                               # convention than KiCad's — the test that matters, since it's
-│                               # not from the same generator as training data. No ground-
-│                               # truth boxes exist for these; evaluated by visual audit
-│                               # (scripts/validate_on_real.py), not automated mAP.
+│   ├── validation/            # REAL circuit diagrams for actual validation: D4, D5, plus
+│   │                           # 50 downloaded sample circuits in a different drawing
+│   │                           # convention than KiCad's. No ground-truth boxes exist for
+│   │                           # these; evaluated by visual audit (validate_on_real.py).
+│   │                           # Tests topology-realism AND icon-style transfer together —
+│   │                           # a failure here doesn't say which one is at fault.
+│   └── validation_kicad_topology/  # [experimental, gitignored] synthetic but topologically
+│                                    # realistic circuits (ladder network: rails + vertical
+│                                    # branches, junction dots — see generate_ladder_circuits.py)
+│                                    # built from our own KiCad-rendered symbols. Isolates the
+│                                    # topology question from the icon-style question: same
+│                                    # style as training, so a failure here can only be a
+│                                    # topology/context problem, not a style-mismatch one. Has
+│                                    # real YOLO ground-truth labels (we placed everything), so
+│                                    # this one CAN be scored with automated mAP, unlike
+│                                    # data/validation/'s real circuits.
 ├── scripts/
 │   ├── build_reference_from_kicad.py   # .kicad_sym -> data/reference/ (see docs/05)
-│   ├── generate_synthetic_dataset.py   # [experimental] composites reference symbols
-│   │                                   # into labeled YOLO training scenes (see docs/02)
+│   ├── generate_synthetic_dataset.py   # [experimental] composites reference symbols at
+│   │                                   # random positions into labeled YOLO training scenes
+│   ├── generate_ladder_circuits.py     # [experimental] composites reference symbols into
+│   │                                   # topologically realistic ladder-network circuits —
+│   │                                   # see data/validation_kicad_topology/ above
 │   ├── train_yolo.py                   # [experimental] trains the YOLO localizer
 │   └── validate_on_real.py             # [experimental] runs the full pipeline over
 │                                        # data/validation/, writes overlays for audit

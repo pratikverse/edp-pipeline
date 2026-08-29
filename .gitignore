@@ -14,5 +14,6 @@ data/reference/*.npz
 data/synth/
 data/synth_dense/
 data/synth*/
+data/validation_kicad_topology/
 *.pt
 debug_*.png
