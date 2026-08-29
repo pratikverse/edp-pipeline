@@ -1,9 +1,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-outputs/*
-!outputs/.gitkeep
-data/reference/*.npz
 .venv/
 *.egg-info/
 .ipynb_checkpoints/
@@ -11,15 +8,17 @@ data/reference/*.npz
 # Synthetic training data and model weights: large and fully
 # regeneratable via scripts/generate_synthetic_dataset.py +
 # scripts/train_yolo.py — not source, don't commit.
-data/synth/
-data/synth_dense/
-data/synth*/
-data/validation_kicad_topology/
 *.pt
 debug_*.png
 runs/
 
-# Downloaded third-party dataset (Roboflow "Circuit Recognition", MIT
-# licensed -- see scripts/convert_roboflow_dataset.py) -- large, and
-# re-downloadable from its source rather than something to vendor here.
-data/roboflow_raw/
+# Not tracked: local data, generated docs, problem-statement materials,
+# model weights/config/outputs — kept on disk, not in the repo.
+/data/
+/docs/
+/Problem Statement/
+/weights/
+/config/
+/outputs/
+/.claude/
+/.vscode/
