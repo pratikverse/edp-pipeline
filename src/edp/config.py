@@ -43,6 +43,11 @@ class ClassifyConfig(BaseModel):
     mirror: bool = True
     unknown_similarity_threshold: float = 0.62
     reference_dir: str = "data/reference"
+    # Fusion policy (docs/08_improvement_plan.md 2.1): when YOLO's own class
+    # prediction disagrees with the DINOv2+FAISS match, prefer YOLO's if its
+    # confidence clears this bar (it's supervised and in-domain), else fall
+    # back to DINOv2. Below both bars -> Unknown.
+    yolo_fusion_confidence_threshold: float = 0.5
 
 
 class TextConfig(BaseModel):

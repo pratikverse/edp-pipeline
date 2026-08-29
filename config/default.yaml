@@ -30,6 +30,7 @@ classify:
   mirror: true
   unknown_similarity_threshold: 0.62
   reference_dir: data/reference
+  yolo_fusion_confidence_threshold: 0.5  # prefer YOLO's class over DINOv2's on disagreement above this
 
 text:
   upscale_factor: 3

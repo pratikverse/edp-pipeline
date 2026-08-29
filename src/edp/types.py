@@ -45,6 +45,14 @@ class Candidate:
     bbox: BBox
     kind: Literal["symbol", "wire", "ambiguous"] = "ambiguous"
     mask: object = None  # optional binary mask, same shape as bbox crop
+    # YOLO's own class prediction, when the localizer is detect/yolo_detect.py
+    # (None for the density-based localizer). Carried through so classify/match.py
+    # can fuse it with the DINOv2+FAISS match rather than discarding it — see
+    # docs/08_improvement_plan.md section 2.1: YOLO is supervised and in-domain
+    # (trained on our own schematic symbols), DINOv2 is not, and on D4 they get
+    # ~10/16 vs ~7/16 correct with non-overlapping error sets.
+    yolo_class: Optional[str] = None
+    yolo_confidence: Optional[float] = None
 
 
 @dataclass

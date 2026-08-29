@@ -4,15 +4,19 @@ branch. See docs/02_model_selection_rationale.md for the rationale entry
 and scripts/generate_synthetic_dataset.py / scripts/train_yolo.py for how
 the detector is trained.
 
-Deliberately still just a *localizer* here, not the final classifier:
-YOLO's own class head is trained purely on synthetic composites (no real
-schematic was in its training data), so its class confidence is a weaker
-signal than the DINOv2+FAISS match against the same KiCad reference
-library already used elsewhere in this pipeline — that comparison still
-runs on every YOLO-proposed box via classify/match.py, unchanged. YOLO's
-job is only "is there a symbol here at all," which is exactly the part
-the density-based localizer struggled with (false positives on wire
-bends, missed components — see the accuracy audit in docs/05).
+Also carries YOLO's own class prediction (`box.cls`/`box.conf`) through
+on each Candidate for classify/match.py to fuse with the DINOv2+FAISS
+match, rather than discarding it. An earlier version of this module
+treated YOLO as localization-only, reasoning its class head was trained
+purely on synthetic composites and so was a weaker signal than DINOv2.
+That reasoning didn't hold up: YOLO is *supervised* on our exact class
+set and has seen schematic-style line art in training, where DINOv2 is
+self-supervised on natural photographs and has never seen a schematic at
+all. Measured on D4: YOLO's top-1 class was correct on ~10/16 checkable
+symbols vs. DINOv2's ~7/16, and the two disagree on different symbols
+(YOLO gets the transistor polarities and R3/R6/C1 right where DINOv2
+doesn't; DINOv2 gets S1/T4 right where YOLO doesn't) — see
+docs/08_improvement_plan.md section 2.1 for the full comparison.
 """
 from __future__ import annotations
 
@@ -34,7 +38,9 @@ def _load_model(weights_path: str):
 
 
 def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig) -> list[Candidate]:
-    """Runs the trained detector and returns candidate bboxes.
+    """Runs the trained detector and returns candidate bboxes, each
+    carrying YOLO's own top-1 class/confidence for the fusion policy in
+    classify/match.py.
 
     Falls back to an empty candidate list (not an exception) if the
     weights file doesn't exist yet — keeps `edp run` usable while a
@@ -48,6 +54,7 @@ def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig) -> list[Candidat
 
     model = _load_model(str(weights_path))
     results = model.predict(img_rgb, conf=cfg.yolo_conf_threshold, iou=cfg.yolo_iou_threshold, verbose=False)
+    class_names = results[0].names
 
     h, w = img_rgb.shape[:2]
     candidates: list[Candidate] = []
@@ -58,7 +65,11 @@ def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig) -> list[Candidat
         if x1 <= x0 or y1 <= y0:
             continue
         bbox: BBox = (x0, y0, x1, y1)
-        candidates.append(Candidate(bbox=bbox, kind="symbol"))
+        yolo_class = class_names[int(box.cls[0])]
+        yolo_confidence = float(box.conf[0])
+        candidates.append(
+            Candidate(bbox=bbox, kind="symbol", yolo_class=yolo_class, yolo_confidence=yolo_confidence)
+        )
 
     # YOLO's own NMS (iou=cfg.yolo_iou_threshold above) doesn't catch every
     # near-duplicate: two boxes from different anchors/scales can each pass
@@ -68,5 +79,8 @@ def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig) -> list[Candidat
     # over-merged connectivity nets downstream (two near-identical boxes'
     # terminals both snapping to the same wire). Reuses the same merge the
     # density-based localizer needed for an analogous reason — see
-    # localize/merge.py.
+    # localize/merge.py. The merge keeps the higher-confidence duplicate's
+    # class rather than dropping class info: on D4, one duplicate pair
+    # scored BJT_PNP 0.27 and BJT_NPN 0.53 for the same transistor, and the
+    # confident one was correct.
     return merge_overlapping(candidates, cfg.candidate_merge_overlap)

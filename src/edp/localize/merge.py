@@ -9,6 +9,12 @@ independently produce two or three boxes for one physical symbol:
   but not identical, so YOLO's own NMS doesn't collapse them (observed on
   D4's T4/IR540, boxed twice ~1-2px apart under different ids, which then
   cascaded into an over-merged connectivity net — see docs/02)
+
+Merging keeps the higher-confidence duplicate's YOLO class/confidence
+rather than discarding it: duplicates aren't always redundant noise, they
+can be independent votes at different confidences. On D4, one duplicate
+pair scored BJT_PNP 0.27 and BJT_NPN 0.53 for the same transistor — the
+confident one was correct (see docs/08_improvement_plan.md section 2.2).
 """
 from __future__ import annotations
 
@@ -27,13 +33,25 @@ def merge_overlapping(candidates: list[Candidate], overlap_threshold: float) -> 
                 if _overlap_ratio(boxes[i].bbox, boxes[j].bbox) >= overlap_threshold:
                     merged_bbox = _union_bbox(boxes[i].bbox, boxes[j].bbox)
                     kind = boxes[i].kind if boxes[i].kind == boxes[j].kind else "ambiguous"
-                    boxes[i] = Candidate(bbox=merged_bbox, kind=kind)
+                    winner = _higher_confidence(boxes[i], boxes[j])
+                    boxes[i] = Candidate(
+                        bbox=merged_bbox,
+                        kind=kind,
+                        yolo_class=winner.yolo_class,
+                        yolo_confidence=winner.yolo_confidence,
+                    )
                     del boxes[j]
                     changed = True
                     break
             if changed:
                 break
     return boxes
+
+
+def _higher_confidence(a: Candidate, b: Candidate) -> Candidate:
+    conf_a = a.yolo_confidence if a.yolo_confidence is not None else -1.0
+    conf_b = b.yolo_confidence if b.yolo_confidence is not None else -1.0
+    return a if conf_a >= conf_b else b
 
 
 def _overlap_ratio(a: BBox, b: BBox) -> float:
