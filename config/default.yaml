@@ -19,7 +19,7 @@ localize:
   candidate_bbox_pad: 4       # px; padding added around each density-blob bbox
   candidate_merge_overlap: 0.5 # union candidates overlapping more than this (of the smaller box)
   use_yolo: true                # experimental branch: YOLO localizer instead of skeleton-density
-  yolo_weights: outputs/yolo_runs/symbol_detector_dense/weights/best.pt  # dense run outperforms sparse (0.899/0.824 vs 0.876/0.768 final mAP)
+  yolo_weights: outputs/yolo_runs/symbol_detector_mixed/weights/best.pt  # mixed run is best of three (0.909/0.837 mAP50/mAP50-95)
   yolo_conf_threshold: 0.12  # lowered from 0.25 - was a recall bottleneck, verified on D5
   yolo_iou_threshold: 0.45
 

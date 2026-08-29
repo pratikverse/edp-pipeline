@@ -27,9 +27,9 @@ class LocalizeConfig(BaseModel):
     candidate_bbox_pad: int = 4
     candidate_merge_overlap: float = 0.5  # union candidates overlapping more than this (relative to the smaller box)
     use_yolo: bool = True  # experimental branch: YOLO localizer instead of skeleton-density
-    yolo_weights: str = "outputs/yolo_runs/symbol_detector_dense/weights/best.pt"  # trained on
-    # denser-packed synthetic layouts; outperforms the sparse run on final mAP50/mAP50-95
-    # (0.899/0.824 vs 0.876/0.768) across most classes — see docs/02
+    yolo_weights: str = "outputs/yolo_runs/symbol_detector_mixed/weights/best.pt"  # trained on
+    # scatter + ladder-topology mixed data on GPU; best of the three runs
+    # (mAP50/mAP50-95 = 0.909/0.837 vs dense 0.899/0.824 vs sparse 0.876/0.768) — see docs/02
     yolo_conf_threshold: float = 0.12  # lowered from 0.25: verified on D5 that most of the
     # detections between 0.1-0.25 confidence land on real components, not noise — the
     # higher threshold was a recall bottleneck, not a precision safeguard (see docs/02)
