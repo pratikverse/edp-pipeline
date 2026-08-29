@@ -18,3 +18,8 @@ data/validation_kicad_topology/
 *.pt
 debug_*.png
 runs/
+
+# Downloaded third-party dataset (Roboflow "Circuit Recognition", MIT
+# licensed -- see scripts/convert_roboflow_dataset.py) -- large, and
+# re-downloadable from its source rather than something to vendor here.
+data/roboflow_raw/

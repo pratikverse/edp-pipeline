@@ -373,6 +373,50 @@ reasoning that justified the junction-dot rule in `docs/06`.
 Diode/Zener are not) — see the conversation record / `edp eval` output for the
 current per-symbol breakdown.
 
+### 1.4b Third-party dataset for YOLO training — *tried 2026-08-30, reverted*
+Explored mixing a found dataset (Roboflow Universe "Circuit Recognition",
+rp-project, MIT licensed, `scripts/convert_roboflow_dataset.py`) into YOLO
+training alongside the KiCad-based synthetic composites — a different route
+to "wider training base" than 1.3's domain randomisation, using real found
+images instead of procedurally-generated ones.
+
+Vetted before using, not assumed: fetched the actual page (past a 403 by
+setting a browser user-agent), pulled the full class list (8 classes:
+`acv, arr, c, i, l, l-, r, v`), and visually inspected real sample crops for
+each candidate class before trusting any mapping. Only 4 of the 8 had a
+verified match to our taxonomy — `r`→Resistor, `c`→Capacitor, `l`→Inductor,
+`v`→Battery (checked that `v`'s crops are drawn in our long/short-plate
+battery convention, not a generic circle symbol) — `acv`/`i` (both drawn as
+circles, no equivalent, and visually close enough to our BJT/MOSFET circle
+convention that mislabelling them would actively hurt) and `arr` (a
+current-direction arrow, not a component) were excluded. Subsampled to 300
+train images (of 3,117 available) to keep the mix roughly proportionate to
+the ~950-image KiCad-based set — using all of it would have swamped the
+other 17 classes' representation with one dataset's specific style.
+
+**Result: reverted, not shipped.** Synthetic-val looked fine (mAP50 0.912,
+mAP50-95 0.798, in line with the existing shipped model) but real-drawing
+detection collapsed on `edp eval`: D4 17→9 boxes found, D5 17→5, combined
+detection F1 0.879→0.174. Far worse than either prior YOLO retrain attempt
+(1.2's 21-class regression only dropped F1 to 0.686; this dropped it to
+0.174). Believed cause, not fully diagnosed: the Roboflow images carry very
+different visual statistics from this project's uniform white-background
+synthetic composites (grey/photographed backgrounds, JPEG artifacts,
+hand-drawn line imprecision — visible in the sample crops pulled during
+vetting) at 36% of the training mix, plausibly enough to disrupt the
+detector's learned notion of what a valid symbol region looks like broadly,
+not just on the classes sourced from it.
+
+Reverted to the shipped 17-class model within the same session, verified
+`edp eval` numbers returned exactly to baseline (65.5% combined
+classification, F1 0.914/0.839 by drawing) before moving on. The failed
+run's weights were deleted; `scripts/convert_roboflow_dataset.py` and the
+vetting methodology are kept — the tool is correct and reusable, this
+particular mixing ratio/approach just didn't work, and a future attempt
+(e.g. a much smaller subsample, or training YOLO with the two data sources
+as separate weighted stages instead of one flat mix) is a testable
+hypothesis, not yet tried.
+
 ### 1.5 Calibrated confidence & abstention — *~4h*
 Replace the single global `unknown_similarity_threshold: 0.62` with per-class
 thresholds fitted on the golden set. Emit top-3 candidates with confidences in the
