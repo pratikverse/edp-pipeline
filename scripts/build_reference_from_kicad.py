@@ -46,6 +46,10 @@ SOURCES = {
     # drawing happens to use.
     "Battery_MultiCell": "Battery",  # multi-cell (long/short line pairs) vs Battery_Cell's single cell
     "Transformer_Wavy": "Transformer",  # parallel-wavy-line winding vs Transformer's interleaved-dash core
+    "Resistor_Box": "Resistor",  # IEC rectangle-box convention vs Resistor's ANSI zigzag -- D4's own
+    # resistors are drawn exactly this way, a diagnosed real style gap (docs/08 section 0.1), not a guess
+    "Ground_Earth": "Ground",  # multi-bar chassis/earth symbol vs GND's single-bar convention
+    "Switch_Push": "Switch",  # momentary pushbutton vs SW_SPST's toggle-lever convention
 }
 
 

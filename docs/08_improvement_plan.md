@@ -282,6 +282,38 @@ own training composites (`generate_synthetic_dataset.py`) is still open, still
 carries the same regression risk Phase 1.2 already demonstrated, and would need
 the same `edp eval`-gated treatment before shipping.
 
+**Follow-up 2026-08-30 — wider reference-library base:** prompted by the user's
+own test circuit visibly not matching D4/D5's drawing conventions either.
+Two additions to `data/reference/` (36 source images now, up from 25),
+both feeding the linear probe retrain above:
+- Three more real KiCad style variants, sourced the same way as 1.2's classes:
+  `Resistor_Box` (IEC rectangle-box resistor — this is literally D4's own
+  resistor convention, a diagnosed gap, not a guess), `Ground_Earth`
+  (multi-bar chassis/earth symbol), `Switch_Push` (momentary pushbutton).
+- `scripts/generate_procedural_variants.py` — parametric drawing (not KiCad-
+  sourced) for structural variation no single fixed symbol can give: battery
+  cell count (2/3/4/5/6), resistor zigzag peak count (3/4/5/6), and a
+  curved-bottom-plate polarized capacitor (the convention D4 actually draws,
+  distinct from the KiCad reference's thick/thin-plate convention). Visually
+  spot-checked before use, same discipline as `domain_randomize.py`.
+
+**Result (measured, `edp eval` on D4+D5 combined):** classification accuracy
+58.6% → 62.1% (17/29 → 18/29). D4 unchanged (81.2%, no regression); D5 30.8% →
+38.5% (one more symbol fixed, `SYM_016`/R2 53.6K, no new errors introduced).
+Modest, not a breakthrough — consistent with the section 0.1 finding that
+most of D5's remaining errors are OCR-quality-driven, not reference-library
+coverage, so a wider library was never going to be the dominant fix for D5
+specifically. Real, honest progress on the thing it actually targets (style
+coverage for drawings unlike either golden-set circuit).
+
+**Cost found along the way, not yet addressed:** classification runtime grew
+noticeably (D4: ~10s → ~84s; D5: ~10s → ~63s) — `pipeline.py` rebuilds
+`ReferenceLibrary` (re-embeds every reference crop) on *every* `edp run` call
+rather than loading the cached `data/reference/index.npz` `build-library`
+already writes. This was already true before this change, just not visible at
+a 184-entry library; at 288 it is. Worth fixing before the library grows
+further, independent of anything else in this document.
+
 ### 1.4 Geometric disambiguation for confusion pairs — *partially done 2026-08-29*
 Implemented in `classify/specialists.py`, routed only when the fused top
 candidates fall in a known confusion group (`match.py`'s
