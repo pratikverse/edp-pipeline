@@ -1,5 +1,20 @@
-"""Bipartite NetworkX graph (symbols + nets), projected to the component
-graph for delivery. See docs/06_data_model.md."""
+"""Two graph views, built from two different sources on purpose:
+
+- The **rich** view (GraphML + node-link JSON) is bipartite (symbols and
+  nets as separate node types, edges = terminal attachments) and is built
+  from the pipeline's internal `DrawingResult` — it carries detail the
+  delivered JSON deliberately drops (which net joins two symbols, pin
+  index, junction count). See docs/06_data_model.md for why nets are the
+  primary connectivity object internally.
+- The **delivered** view (the PNG) is the plain component graph — nodes
+  are symbols, edges are `connections` pairs — and needs nothing beyond
+  what's already in the trimmed JSON (emit/json_out.py::to_json_dict).
+  `connections` is already a complete, symmetric adjacency list, so this
+  graph is built directly from that JSON rather than re-deriving it from
+  `DrawingResult`: the JSON and the picture are then visibly the same
+  data, not two independent projections of a shared source that happen
+  to agree.
+"""
 from __future__ import annotations
 
 import math
@@ -7,6 +22,7 @@ from pathlib import Path
 
 import networkx as nx
 
+from edp.emit.json_out import to_json_dict
 from edp.types import DrawingResult
 
 
@@ -41,20 +57,18 @@ def build_bipartite_graph(result: DrawingResult) -> nx.Graph:
     return g
 
 
-def project_component_graph(bipartite: nx.Graph) -> nx.Graph:
-    """Symbols connected iff they share a net. This is the 'connections'
-    view delivered to match the problem statement's example schema."""
-    symbol_nodes = [n for n, d in bipartite.nodes(data=True) if d.get("bipartite") == "symbol"]
-    net_nodes = [n for n, d in bipartite.nodes(data=True) if d.get("bipartite") == "net"]
-
-    projected = nx.Graph()
-    projected.add_nodes_from((n, bipartite.nodes[n]) for n in symbol_nodes)
-    for net in net_nodes:
-        members = list(bipartite.neighbors(net))
-        for i in range(len(members)):
-            for j in range(i + 1, len(members)):
-                projected.add_edge(members[i], members[j], via_net=net)
-    return projected
+def build_component_graph_from_json(json_dict: dict) -> nx.Graph:
+    """The delivered graph: nodes = symbols (typed), edges = `connections`
+    pairs, straight from the trimmed JSON — no re-derivation from nets,
+    terminals, or anything else internal. `connections` is already
+    symmetric, so each pair only needs adding once."""
+    g = nx.Graph()
+    for symbol in json_dict["symbols"]:
+        g.add_node(symbol["id"], type=symbol["type"])
+    for symbol in json_dict["symbols"]:
+        for other_id in symbol["connections"]:
+            g.add_edge(symbol["id"], other_id)
+    return g
 
 
 def export_all(result: DrawingResult, out_dir: str | Path) -> dict[str, str]:
@@ -62,7 +76,7 @@ def export_all(result: DrawingResult, out_dir: str | Path) -> dict[str, str]:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     bipartite = build_bipartite_graph(result)
-    projected = project_component_graph(bipartite)
+    component_graph = build_component_graph_from_json(to_json_dict(result))
 
     graphml_path = out_dir / f"{result.drawing_id}_graph.graphml"
     nx.write_graphml(bipartite, graphml_path)
@@ -73,7 +87,7 @@ def export_all(result: DrawingResult, out_dir: str | Path) -> dict[str, str]:
     json_path.write_text(_json.dumps(nx.node_link_data(bipartite, edges="edges"), indent=2), encoding="utf-8")
 
     png_path = out_dir / f"{result.drawing_id}_graph.png"
-    _render_png(projected, png_path)
+    _render_png(component_graph, png_path)
 
     return {
         "graphml": str(graphml_path),
