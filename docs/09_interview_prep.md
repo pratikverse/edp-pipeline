@@ -1,3 +1,8 @@
+> **Note (2026-08-30):** written before the domain-pack restructure. Paths like
+> `src/edp/...` and `config/reference_designators.yaml` have moved. Current state:
+> `docs/TECHNICAL_DOCUMENTATION.md`, `docs/11`–`docs/13`, `for me/CODE_FILES_REFERENCE.md`.
+> The diagnoses and measured numbers here still hold; the file locations don't.
+
 # Interview Prep — In-Depth Reference
 
 Everything about the pipeline, in enough depth to answer any follow-up.
