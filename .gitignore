@@ -26,3 +26,4 @@ outputs/
 /data/synth_pid/
 /data/pid_reference/
 scripts/_*.sh
+/for me/
