@@ -24,8 +24,10 @@ SOURCE = "dinov2_probe"
 def _load(model_path: str):
     import joblib
 
+    if not model_path:
+        return None
     path = Path(model_path)
-    if not path.exists():
+    if not path.is_file():
         return None
     return joblib.load(path)
 
