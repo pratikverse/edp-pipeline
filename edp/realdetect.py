@@ -43,9 +43,9 @@ _warned = False
 class RealDetectorSpec:
     """The `real_detector:` block of a domain pack's pack.yaml."""
 
-    provider: str            # currently only "roboflow"
-    model_id: str            # e.g. "jonathanapps/circuit-component-detection/2"
-    conf: float = 0.20       # Roboflow confidence percentage is 0-100; we pass conf*100
+    provider: str            # "roboflow" (hosted) or "local" (an ultralytics .pt)
+    model_id: str            # roboflow "ws/project/version", or a local weights path
+    conf: float = 0.20       # 0-1; roboflow wants it *100, ultralytics wants it as-is
     overlap: float = 0.30
 
     @classmethod
@@ -54,7 +54,7 @@ class RealDetectorSpec:
             return None
         return cls(
             provider=d.get("provider", "roboflow"),
-            model_id=d["model_id"],
+            model_id=d.get("model_id") or d["weights"],
             conf=float(d.get("conf", 0.20)),
             overlap=float(d.get("overlap", 0.30)),
         )
@@ -65,7 +65,11 @@ def detect_real(img_rgb: np.ndarray, spec: RealDetectorSpec) -> list[Candidate]:
     [] on any failure. `img_rgb` is the same array the synthetic detector
     gets, so the two proposal sets share a coordinate frame."""
     global _warned
-    if spec is None or spec.provider != "roboflow":
+    if spec is None:
+        return []
+    if spec.provider == "local":
+        return _detect_local(img_rgb, spec)
+    if spec.provider != "roboflow":
         return []
 
     raw = _predict_cached(img_rgb, spec)
@@ -91,6 +95,43 @@ def detect_real(img_rgb: np.ndarray, spec: RealDetectorSpec) -> list[Candidate]:
         # value; a class-bearing synthetic box still wins the class slot.
         out.append(Candidate(bbox=bbox, kind="symbol", yolo_confidence=float(p.get("confidence", 0.0)),
                              source="real_detector"))
+    return out
+
+
+_local_model_cache: dict[str, object] = {}
+
+
+def _detect_local(img_rgb: np.ndarray, spec: RealDetectorSpec) -> list[Candidate]:
+    """Class-agnostic boxes from a local ultralytics .pt (e.g. the
+    single-class detector from scripts/build_realdata_detector.py)."""
+    global _warned
+    weights = Path(spec.model_id)
+    if not weights.exists():
+        if not _warned:
+            log.warning("real_detector local weights missing: %s — continuing without it", weights)
+            _warned = True
+        return []
+    try:
+        from ultralytics import YOLO
+
+        model = _local_model_cache.get(str(weights))
+        if model is None:
+            model = YOLO(str(weights))
+            _local_model_cache[str(weights)] = model
+        res = model.predict(img_rgb, conf=spec.conf, iou=spec.overlap, verbose=False)[0]
+    except Exception as e:
+        log.warning("local real_detector failed: %s", e)
+        return []
+
+    h, w = img_rgb.shape[:2]
+    out: list[Candidate] = []
+    for box in res.boxes:
+        x0, y0, x1, y1 = (int(v) for v in box.xyxy[0].tolist())
+        x0, y0, x1, y1 = max(0, x0), max(0, y0), min(w, x1), min(h, y1)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        out.append(Candidate(bbox=(x0, y0, x1, y1), kind="symbol",
+                             yolo_confidence=float(box.conf[0]), source="real_detector"))
     return out
 
 

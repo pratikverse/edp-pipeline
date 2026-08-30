@@ -16,10 +16,14 @@ specialists_module: edp.domains.electronic.specialists
 # Roboflow hosted inference; responses cached to outputs/realdetect_cache/,
 # and the pipeline runs fine without it (offline / no API key -> skipped).
 real_detector:
-  provider: roboflow
-  model_id: jonathanapps/circuit-component-detection/2
-  conf: 0.50
-  overlap: 0.30
+  # Local class-agnostic detector: yolov8s trained (single-class) on the
+  # nadim-ahmed/circuit-component-detection dataset — see
+  # scripts/build_realdata_detector.py and docs/11. Alternative tried:
+  # provider: roboflow, model_id: jonathanapps/circuit-component-detection/2.
+  provider: local
+  model_id: data/models/realdata_symbol_detector.pt
+  conf: 0.35
+  overlap: 0.45
 
 evidence_weights:
   yolo: 1.2

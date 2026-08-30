@@ -49,6 +49,44 @@ approached from the other side. It fires readily on wire junctions,
 label text and border lines that don't look like symbols to a detector
 tuned for schematic line art.
 
+## Follow-up: train our own class-agnostic detector (docs/09 §9 "Option C")
+
+Since no circuit detector on Roboflow Universe publishes downloadable
+weights, the alternative was to train one. `scripts/build_realdata_detector.py`
+takes `nadim-ahmed/circuit-component-detection` v21 (~4300 real circuit
+*schematic* images, a 17-class taxonomy that closely matches ours),
+remaps every class to a single `symbol` (dropping `Wire_Overlap`), and
+trains `yolov8s single_cls` — 30 epochs, GPU. Its own held-out val:
+mAP50 0.992. Wired in via `edp/realdetect.py` `provider: local`.
+
+### Result (`edp eval`, D4 + D5 combined)
+
+| conf | boxes added (D4/D5) | Precision | Recall | **Detection F1** | Classification |
+|---|---|---|---|---|---|
+| **off (shipped)** | — | 0.853 | 0.906 | **0.879** | 0.655 |
+| 0.25 | 19 / 31 | 0.518 | 0.906 | 0.659 | 0.690 |
+| 0.40 | 19 / 28 | 0.537 | 0.906 | 0.674 | 0.690 |
+| 0.55 | 18 / 24 | 0.580 | 0.906 | 0.707 | 0.690 |
+| 0.70 | 15 / 19 | 0.630 | 0.906 | 0.744 | 0.690 |
+
+**Same outcome, and the same root cause.** Recall never moved off 0.906 —
+the synthetic detector already finds every findable symbol; the 3 it
+misses are genuinely hard (tiny / overlapping estimated boxes) and a
+real-data detector can't recover them, it only adds false positives
+elsewhere. D4 alone at conf 0.70 nearly recovers baseline (F1 0.889) but
+D5 collapses (0.619) — the detector fires heavily on D5's specific
+rendering. Classification ticks up (+3.5pt) only because a couple of the
+spurious boxes happen to land on real symbols and get classified; with
+17–27 false positives that is not a win.
+
+**Two independent attempts — off-the-shelf and self-trained, on
+different real datasets — both measurably hurt, for the same reason.**
+That is the useful finding: the KiCad-line-art vs. real-drawing gap is a
+property of the target, not of any one model or dataset, so more effort
+on real-data detectors is not the lever. The synthetic detector's
+weakness is genuine but the fix is better synthetic coverage (docs/09
+§9), not a real-data crutch that trades precision for nothing.
+
 ## Decision
 
 Default **off**. Infrastructure kept and tested (`tests/test_realdetect.py`),
