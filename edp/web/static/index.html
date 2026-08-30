@@ -40,10 +40,16 @@
   .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 
   /* graph */
-  #graph-svg { width: 100%; height: 100%; }
-  #graph-svg line { stroke: #3a4152; stroke-width: 1.4; }
-  #graph-svg circle { stroke: #0f1115; stroke-width: 1.5; cursor: grab; }
-  #graph-svg text { fill: var(--text); font-family: ui-monospace, Consolas, monospace; pointer-events: none; }
+  #graph-out { position: relative; display: block; padding: 0; overflow: hidden; }
+  #graph-svg { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; background: #0c0e13; }
+  #graph-svg line { stroke: #5b6577; stroke-width: 1.6; }
+  #graph-svg line.sep { stroke: var(--border); stroke-dasharray: 4 4; }
+  #graph-svg circle { stroke: #0c0e13; stroke-width: 2; cursor: grab; }
+  #graph-svg .nid   { fill: var(--text); font: 600 12px ui-monospace, Consolas, monospace; pointer-events: none; }
+  #graph-svg .ntype { fill: var(--muted); font: 10px ui-monospace, Consolas, monospace; pointer-events: none; }
+  #graph-svg .cap   { fill: var(--muted); font: 11px -apple-system, Segoe UI, sans-serif; }
+  .graph-bar { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 2; }
+  .graph-bar button { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 3px 9px; font-size: 13px; border-radius: 5px; min-width: 26px; }
 </style>
 </head>
 <body>
@@ -134,126 +140,233 @@ function renderDetected(container, symbols, types){
   return img; // caller sets .src once the overlay data-url is known
 }
 
-// --- tiny dependency-free force-directed layout, drawn as SVG ---
+// --- dependency-free force-directed graph: pan (drag bg) + zoom (wheel),
+//     connected nodes force-laid, unconnected nodes in a tidy grid below ---
+const svgNS = 'http://www.w3.org/2000/svg';
+const W = 1000, H = 680, R = 11;
+
 function renderGraph(container, symbols){
   container.innerHTML = '';
   if (!symbols.length){ container.innerHTML = '<div class="empty">no components</div>'; return; }
 
+  let isoStripY = 0;
   const types = [...new Set(symbols.map(s => s.type))].sort();
   const idIndex = new Map(symbols.map((s, i) => [s.id, i]));
-  const nodes = symbols.map((s, i) => ({
-    id: s.id, type: s.type,
-    x: Math.cos(i / symbols.length * 2 * Math.PI) * 120 + (Math.random() - 0.5) * 20,
-    y: Math.sin(i / symbols.length * 2 * Math.PI) * 120 + (Math.random() - 0.5) * 20,
-    vx: 0, vy: 0,
-  }));
-  const edgeSet = new Set();
-  const edges = [];
+  const nodes = symbols.map(s => ({ id: s.id, type: s.type, x: 0, y: 0, fx: 0, fy: 0, deg: 0 }));
+
+  const edgeSet = new Set(), edges = [];
   for (const s of symbols){
     for (const other of s.connections){
       if (!idIndex.has(other)) continue;
       const a = idIndex.get(s.id), b = idIndex.get(other);
+      if (a === b) continue;
       const key = a < b ? `${a}-${b}` : `${b}-${a}`;
       if (edgeSet.has(key)) continue;
       edgeSet.add(key);
       edges.push([Math.min(a, b), Math.max(a, b)]);
+      nodes[a].deg++; nodes[b].deg++;
     }
   }
   $('edge-count').textContent = `${edges.length} edges`;
 
-  // simulate (Fruchterman-Reingold-ish + weak gravity so isolated nodes
-  // don't drift off)
-  const K = 55;                       // ideal edge length
-  const ITER = 500;
-  for (let iter = 0; iter < ITER; iter++){
-    const t = (1 - iter / ITER);
-    for (const n of nodes){ n.fx = 0; n.fy = 0; }
-    for (let i = 0; i < nodes.length; i++){
-      for (let j = i + 1; j < nodes.length; j++){
-        let dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
-        let d = Math.hypot(dx, dy) || 0.01;
-        const rep = (K*K) / d;
-        nodes[i].fx += dx/d * rep; nodes[i].fy += dy/d * rep;
-        nodes[j].fx -= dx/d * rep; nodes[j].fy -= dy/d * rep;
+  // adjacency + connected components (BFS)
+  const adj = nodes.map(() => []);
+  for (const [a, b] of edges){ adj[a].push(b); adj[b].push(a); }
+  const comp = nodes.map(() => -1);
+  const comps = [];
+  for (let i = 0; i < nodes.length; i++){
+    if (comp[i] !== -1) continue;
+    const q = [i], members = []; comp[i] = comps.length;
+    while (q.length){
+      const u = q.pop(); members.push(u);
+      for (const v of adj[u]) if (comp[v] === -1){ comp[v] = comps.length; q.push(v); }
+    }
+    comps.push(members);
+  }
+  const multi    = comps.filter(c => c.length > 1);
+  const isolated = comps.filter(c => c.length === 1).map(c => nodes[c[0]]);
+
+  // force-layout each multi-node component on its own, then fit it into a cell
+  function layoutComponent(members){
+    const local = members.map(idx => nodes[idx]);
+    local.forEach((n, i) => {
+      n.x = Math.cos(i / local.length * 6.283) * 120 + (Math.random() - .5) * 30;
+      n.y = Math.sin(i / local.length * 6.283) * 120 + (Math.random() - .5) * 30;
+    });
+    const K = 70, ITER = 500;
+    const inSet = new Set(members);
+    for (let it = 0; it < ITER; it++){
+      const t = 1 - it / ITER;
+      for (const n of local){ n.fx = 0; n.fy = 0; }
+      for (let i = 0; i < local.length; i++)
+        for (let j = i + 1; j < local.length; j++){
+          let dx = local[i].x - local[j].x, dy = local[i].y - local[j].y;
+          let d = Math.hypot(dx, dy) || .01;
+          const f = (K * K) / d;
+          local[i].fx += dx/d*f; local[i].fy += dy/d*f;
+          local[j].fx -= dx/d*f; local[j].fy -= dy/d*f;
+        }
+      for (const [a, b] of edges){
+        if (!inSet.has(a) || !inSet.has(b)) continue;
+        const na = nodes[a], nb = nodes[b];
+        let dx = nb.x - na.x, dy = nb.y - na.y;
+        const d = Math.hypot(dx, dy) || .01;
+        const f = Math.min((d * d) / K, 40);
+        na.fx += dx/d*f; na.fy += dy/d*f;
+        nb.fx -= dx/d*f; nb.fy -= dy/d*f;
+      }
+      for (const n of local){
+        n.fx += -n.x * 0.03; n.fy += -n.y * 0.03;
+        const mag = Math.hypot(n.fx, n.fy) || 1;
+        n.x += n.fx/mag * Math.min(mag, 9 * t + 1);
+        n.y += n.fy/mag * Math.min(mag, 9 * t + 1);
       }
     }
-    for (const [a, b] of edges){
-      let dx = nodes[b].x - nodes[a].x, dy = nodes[b].y - nodes[a].y;
-      const d = Math.hypot(dx, dy) || 0.01;
-      const attr = (d*d) / K;
-      nodes[a].fx += dx/d * attr; nodes[a].fy += dy/d * attr;
-      nodes[b].fx -= dx/d * attr; nodes[b].fy -= dy/d * attr;
-    }
-    for (const n of nodes){
-      n.fx += -n.x * 0.04; n.fy += -n.y * 0.04;   // gravity to centre
-      const step = Math.min(Math.hypot(n.fx, n.fy), 6 * t + 0.5);
-      const d = Math.hypot(n.fx, n.fy) || 1;
-      n.x += n.fx/d * step; n.y += n.fy/d * step;
-    }
+  }
+  multi.forEach(layoutComponent);
+
+  // position each component (at its natural force-layout scale) so they
+  // don't overlap: pack left-to-right, wrap to a new row, then drop the
+  // isolated nodes into a grid underneath
+  const GAP = 70;
+  let curX = 0, curY = 0, rowH = 0, maxX = 0;
+  const bboxOf = list => {
+    const xs = list.map(n => n.x), ys = list.map(n => n.y);
+    return { mnx: Math.min(...xs), mny: Math.min(...ys), mxx: Math.max(...xs), mxy: Math.max(...ys) };
+  };
+  multi.sort((a, b) => b.length - a.length);
+  for (const members of multi){
+    const local = members.map(i => nodes[i]);
+    const bb = bboxOf(local);
+    const w = bb.mxx - bb.mnx, h = bb.mxy - bb.mny;
+    if (curX > 0 && curX + w > 1400){ curX = 0; curY += rowH + GAP; rowH = 0; }
+    const dx = curX - bb.mnx, dy = curY - bb.mny;
+    for (const n of local){ n.x += dx; n.y += dy; }
+    curX += w + GAP; rowH = Math.max(rowH, h); maxX = Math.max(maxX, curX);
+  }
+  if (isolated.length){
+    const stripY = curY + rowH + (multi.length ? GAP + 20 : 0);
+    isoStripY = stripY;
+    const cols = Math.max(4, Math.min(isolated.length, Math.round(maxX / 150) || 8));
+    isolated.forEach((n, i) => {
+      n.x = (i % cols) * 150;
+      n.y = stripY + 24 + Math.floor(i / cols) * 60;
+    });
   }
 
-  // normalize the settled layout into a fixed W×H box so node/edge sizes
-  // stay sensible whether the graph is dense or a sparse scatter
-  const W = 800, H = 560, pad = 40;
-  let xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
-  let minX = Math.min(...xs), maxX = Math.max(...xs);
-  let minY = Math.min(...ys), maxY = Math.max(...ys);
-  const sx = (maxX - minX) < 1 ? 1 : (W - 2*pad) / (maxX - minX);
-  const sy = (maxY - minY) < 1 ? 1 : (H - 2*pad) / (maxY - minY);
-  const s = Math.min(sx, sy);
-  for (const n of nodes){
-    n.x = pad + (n.x - minX) * s;
-    n.y = pad + (n.y - minY) * s;
-  }
-  const R = 8, FS = 11;
-
-  const svgNS = 'http://www.w3.org/2000/svg';
+  // --- build SVG; viewBox = content bounds so it fits by default,
+  //     preserveAspectRatio letterboxes it into whatever the panel is ---
+  const gx = nodes.map(n => n.x), gy = nodes.map(n => n.y);
+  const vbx = Math.min(...gx) - 90, vby = Math.min(...gy) - 40;
+  const vbw = (Math.max(...gx) + 160) - vbx, vbh = (Math.max(...gy) + 50) - vby;
   const svg = document.createElementNS(svgNS, 'svg');
   svg.id = 'graph-svg';
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('viewBox', `${vbx} ${vby} ${vbw} ${vbh}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  const vp = document.createElementNS(svgNS, 'g');   // pan/zoom target
+  svg.appendChild(vp);
 
-  for (const [a, b] of edges){
+  if (isolated.length && multi.length){
+    const sepY = isoStripY - 4;
+    const xs = nodes.map(n => n.x);
+    const sep = document.createElementNS(svgNS, 'line');
+    sep.setAttribute('x1', Math.min(...xs) - 20); sep.setAttribute('x2', Math.max(...xs) + 20);
+    sep.setAttribute('y1', sepY); sep.setAttribute('y2', sepY);
+    sep.setAttribute('class', 'sep');
+    vp.appendChild(sep);
+    const cap = document.createElementNS(svgNS, 'text');
+    cap.setAttribute('x', Math.min(...xs) - 20); cap.setAttribute('y', sepY - 6);
+    cap.setAttribute('class', 'cap');
+    cap.textContent = `unconnected (${isolated.length})`;
+    vp.appendChild(cap);
+  }
+
+  const lineEls = edges.map(([a, b]) => {
     const l = document.createElementNS(svgNS, 'line');
     l.setAttribute('x1', nodes[a].x); l.setAttribute('y1', nodes[a].y);
     l.setAttribute('x2', nodes[b].x); l.setAttribute('y2', nodes[b].y);
     l.dataset.a = a; l.dataset.b = b;
-    svg.appendChild(l);
-  }
-  const nodeEls = [];
+    vp.appendChild(l);
+    return l;
+  });
+
   nodes.forEach((n, i) => {
     const g = document.createElementNS(svgNS, 'g');
+    g.setAttribute('class', 'node');
     const c = document.createElementNS(svgNS, 'circle');
-    c.setAttribute('cx', n.x); c.setAttribute('cy', n.y);
     c.setAttribute('r', R);
     c.setAttribute('fill', colorForType(n.type, types));
-    const label = document.createElementNS(svgNS, 'text');
-    label.setAttribute('x', n.x + R + 2); label.setAttribute('y', n.y + 4);
-    label.setAttribute('font-size', FS);
-    label.textContent = n.id.replace(/^SYM_/, '');
-    g.appendChild(c); g.appendChild(label);
-    svg.appendChild(g);
-    nodeEls.push({ c, label });
+    const t1 = document.createElementNS(svgNS, 'text');   // id
+    t1.setAttribute('class', 'nid');
+    t1.textContent = n.id;
+    const t2 = document.createElementNS(svgNS, 'text');   // type
+    t2.setAttribute('class', 'ntype');
+    t2.textContent = n.type;
+    g.append(c, t1, t2);
+    vp.appendChild(g);
+    n._els = { g, c, t1, t2 };
+    place(n);
 
-    // drag
     let dragging = false;
-    c.addEventListener('pointerdown', e => { dragging = true; c.setPointerCapture(e.pointerId); c.style.cursor = 'grabbing'; });
-    c.addEventListener('pointerup',   e => { dragging = false; c.style.cursor = 'grab'; });
+    c.addEventListener('pointerdown', e => {
+      e.stopPropagation(); dragging = true; c.setPointerCapture(e.pointerId);
+    });
+    c.addEventListener('pointerup', e => { dragging = false; });
     c.addEventListener('pointermove', e => {
       if (!dragging) return;
-      const pt = svg.createSVGPoint();
-      pt.x = e.clientX; pt.y = e.clientY;
-      const p = pt.matrixTransform(svg.getScreenCTM().inverse());
-      n.x = p.x; n.y = p.y;
-      c.setAttribute('cx', n.x); c.setAttribute('cy', n.y);
-      label.setAttribute('x', n.x + R + 2); label.setAttribute('y', n.y + 4);
-      svg.querySelectorAll('line').forEach(l => {
+      const p = toLocal(e); n.x = p.x; n.y = p.y; place(n);
+      for (const l of lineEls){
         if (+l.dataset.a === i){ l.setAttribute('x1', n.x); l.setAttribute('y1', n.y); }
         if (+l.dataset.b === i){ l.setAttribute('x2', n.x); l.setAttribute('y2', n.y); }
-      });
+      }
     });
   });
 
-  container.appendChild(svg);
+  function place(n){
+    n._els.c.setAttribute('cx', n.x); n._els.c.setAttribute('cy', n.y);
+    n._els.t1.setAttribute('x', n.x + R + 4); n._els.t1.setAttribute('y', n.y - 1);
+    n._els.t2.setAttribute('x', n.x + R + 4); n._els.t2.setAttribute('y', n.y + 10);
+  }
+
+  // --- pan + zoom: a transform on vp, on top of the fit-by-default viewBox ---
+  let k = 1, tx = 0, ty = 0;
+  const apply = () => vp.setAttribute('transform', `translate(${tx} ${ty}) scale(${k})`);
+  const fitView = () => { k = 1; tx = 0; ty = 0; apply(); };
+  function toLocal(e){
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(vp.getScreenCTM().inverse());
+  }
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const before = toLocal(e);
+    k = Math.max(0.25, Math.min(6, k * (e.deltaY < 0 ? 1.15 : 1/1.15)));
+    apply();
+    const after = toLocal(e);
+    tx += (after.x - before.x) * k; ty += (after.y - before.y) * k;
+    apply();
+  }, { passive: false });
+  let panning = false, px = 0, py = 0;
+  svg.addEventListener('pointerdown', e => { panning = true; px = e.clientX; py = e.clientY; svg.style.cursor = 'grabbing'; });
+  svg.addEventListener('pointerup',   () => { panning = false; svg.style.cursor = 'grab'; });
+  svg.addEventListener('pointerleave',() => { panning = false; });
+  svg.addEventListener('pointermove', e => {
+    if (!panning) return;
+    tx += e.clientX - px; ty += e.clientY - py; px = e.clientX; py = e.clientY; apply();
+  });
+
+  // toolbar
+  const bar = document.createElement('div');
+  bar.className = 'graph-bar';
+  const mk = (txt, fn) => { const b = document.createElement('button'); b.textContent = txt; b.onclick = fn; return b; };
+  const zoomAt = f => { k = Math.max(0.25, Math.min(6, k * f)); apply(); };
+  bar.append(
+    mk('+', () => zoomAt(1.25)),
+    mk('−', () => zoomAt(1/1.25)),
+    mk('fit', fitView),
+  );
+
+  container.append(bar, svg);
+  apply();
 }
 
 fileInput.addEventListener('change', () => {
