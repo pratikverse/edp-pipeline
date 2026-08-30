@@ -43,6 +43,7 @@ class DomainPack:
     evidence_weights: dict[str, float] = field(default_factory=dict)
     specialists_module: str | None = None  # dotted path exposing CONFUSION_GROUPS + select_specialist
     real_detector: "RealDetectorSpec | None" = None  # off-the-shelf recall-booster detector
+    router_keywords: list[str] = field(default_factory=list)  # page-router hints (see route())
 
     @cached_property
     def _specialists(self):
@@ -86,7 +87,15 @@ class DomainPack:
             evidence_weights=dict(d.get("evidence_weights", {})),
             specialists_module=d.get("specialists_module"),
             real_detector=RealDetectorSpec.from_dict(d.get("real_detector")),
+            router_keywords=[k.upper() for k in d.get("router_keywords", [])],
         )
+
+    def _designator_prefixes(self) -> set[str]:
+        try:
+            raw = yaml.safe_load(self.designators_path.read_text(encoding="utf-8")) or {}
+            return {k.upper() for k in (raw.get("designators") or {})}
+        except Exception:
+            return set()
 
 
 def list_domains() -> list[str]:
@@ -95,3 +104,45 @@ def list_domains() -> list[str]:
         for p in _DOMAINS_DIR.glob("*/pack.yaml")
         if p.parent.name != "__pycache__"
     )
+
+
+def route(gray, text_cfg, default: str = "electronic") -> tuple[str, dict]:
+    """Pick a domain pack for a drawing from its text alone.
+
+    A P&ID and an electronic schematic are told apart cheaply and
+    reliably by what's written on them: process words and ISA instrument
+    tags (GPM, OUTLET, PC, LT, FCV) vs. component values, units and part
+    numbers (10K, uF, BC547, R6). Each pack contributes its designator
+    prefixes plus a `router_keywords` list; the drawing's OCR tokens are
+    scored against both and the higher score wins. Falls back to
+    `default` when the signal is thin or tied, so a text-sparse drawing
+    still runs rather than erroring.
+
+    Returns (domain_name, scores, tokens) — the OCR tokens are handed back
+    so the caller doesn't run OCR twice.
+    """
+    import re as _re
+
+    from edp.ocr import run_ocr
+
+    tokens = run_ocr(gray, text_cfg)
+    norm = [_re.sub(r"[^A-Z0-9Ω°ΜµμΩ]", "", t.text.upper()) for t in tokens]
+    norm = [t for t in norm if t]
+
+    scores: dict[str, int] = {}
+    for name in list_domains():
+        pack = DomainPack.load(name)
+        prefixes = pack._designator_prefixes()
+        kws = pack.router_keywords
+        s = 0
+        for tok in norm:
+            if any(tok.startswith(p) and tok[len(p):][:1].isdigit() for p in prefixes if p):
+                s += 1
+            if any(kw in tok for kw in kws):
+                s += 1
+        scores[name] = s
+
+    best = max(scores, key=scores.get) if scores else default
+    if not scores or scores[best] == 0 or list(scores.values()).count(scores[best]) > 1:
+        best = default
+    return best, scores, tokens

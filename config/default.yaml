@@ -1,7 +1,7 @@
 # Pipeline thresholds. Domain-specific knowledge (symbol library, detector
 # weights, OCR designator table, fusion weights) is in edp/domains/<domain>/pack.yaml.
 
-domain: electronic
+domain: auto   # auto | electronic | pid  -- "auto" routes by drawing text (edp/domains/base.py::route)
 
 
 preprocess:

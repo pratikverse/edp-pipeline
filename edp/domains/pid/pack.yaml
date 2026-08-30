@@ -1,0 +1,22 @@
+# Process & instrumentation diagrams (D1, D2, D3): vessels, pumps, valves,
+# heat exchangers, instrument bubbles, compressors, filters, motors.
+# Symbols drawn procedurally per ISA-5.1 (scripts/build_pid_reference.py);
+# detector trained on synthetic composites of them.
+detector_weights: data/models/pid_synthetic_yolo.pt
+reference_dir: data/pid_reference
+designators_path: edp/domains/pid/tags.yaml
+probe_model_path: null
+specialists_module: edp.domains.pid.specialists
+
+# No real-data second detector for this domain (no suitable off-the-shelf
+# P&ID model vetted yet).
+
+evidence_weights:
+  yolo: 1.2
+  dinov2: 1.0
+  text_prior: 1.2   # ISA tags are highly diagnostic when OCR reads them
+
+# Page-router hints (edp/domains/base.py::route): process/P&ID vocabulary.
+router_keywords: [GPM, INLET, OUTLET, STEAM, CONDENSATE, PUMP, VESSEL, FLARE, VAPOR,
+  DEMISTER, DESICCANT, ACCUMULATOR, COMPRESSOR, BLOWER, EXCHANGER, COOLER, FEED,
+  TOLUENE, REGENERATION, ATMOSPHERE, COLUMN, TRAY, CENTRIFUGAL, HEATER, VORTEX]

@@ -32,13 +32,13 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-REFERENCE_DIR = REPO_ROOT / "data" / "reference"
+DEFAULT_REFERENCE_DIR = REPO_ROOT / "data" / "reference"
 
 # Real symbols in D4/D5 run roughly 25-90px on a side; our KiCad renders are
 # 20px/mm and much larger (up to 430px) since that scale was chosen for
 # clean DINOv2 embedding, not matched to real drawing scale. Composing at
 # the real distribution is what makes the trained detector transfer.
-TARGET_SIZE_RANGE = (24, 85)
+DEFAULT_TARGET_SIZE_RANGE = (24, 85)
 ROTATIONS = [0, 90, 180, 270]
 
 
@@ -47,6 +47,8 @@ class GenConfig:
     out_dir: Path
     canvas_size_range: tuple[int, int] = (500, 900)
     symbols_per_canvas_range: tuple[int, int] = (6, 16)
+    target_size_range: tuple[int, int] = DEFAULT_TARGET_SIZE_RANGE
+    reference_dir: Path = DEFAULT_REFERENCE_DIR
     placement_attempts: int = 15
 
 
@@ -56,11 +58,11 @@ class SourceSymbol:
     image: np.ndarray  # BGR, white background
 
 
-def load_sources() -> tuple[list[SourceSymbol], list[str]]:
-    class_names = sorted(p.name for p in REFERENCE_DIR.iterdir() if p.is_dir())
+def load_sources(reference_dir: Path) -> tuple[list[SourceSymbol], list[str]]:
+    class_names = sorted(p.name for p in reference_dir.iterdir() if p.is_dir())
     sources = []
     for class_name in class_names:
-        for img_path in sorted((REFERENCE_DIR / class_name).glob("*.png")):
+        for img_path in sorted((reference_dir / class_name).glob("*.png")):
             img = cv2.imread(str(img_path), cv2.IMREAD_COLOR)
             if img is not None:
                 sources.append(SourceSymbol(class_name=class_name, image=img))
@@ -72,9 +74,9 @@ def _rotate(img: np.ndarray, degrees: int) -> np.ndarray:
     return img if code is None else cv2.rotate(img, code)
 
 
-def _resize_to_target(img: np.ndarray) -> np.ndarray:
+def _resize_to_target(img: np.ndarray, size_range: tuple[int, int]) -> np.ndarray:
     h, w = img.shape[:2]
-    target_long = random.uniform(*TARGET_SIZE_RANGE)
+    target_long = random.uniform(*size_range)
     scale = target_long / max(h, w)
     new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
     return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
@@ -130,7 +132,7 @@ def generate_one(sources: list[SourceSymbol], class_names: list[str], rng: rando
 
     for _ in range(n_symbols):
         src = rng.choice(sources)
-        variant = _resize_to_target(src.image)
+        variant = _resize_to_target(src.image, gen_cfg.target_size_range)
         variant = _rotate(variant, rng.choice(ROTATIONS))
         sh, sw = variant.shape[:2]
         if sh >= h - 20 or sw >= w - 20:
@@ -210,15 +212,20 @@ def main() -> None:
     parser.add_argument("--symbols-max", type=int, default=16)
     parser.add_argument("--canvas-min", type=int, default=500)
     parser.add_argument("--canvas-max", type=int, default=900)
+    parser.add_argument("--reference-dir", type=str, default=None)
+    parser.add_argument("--size-min", type=int, default=DEFAULT_TARGET_SIZE_RANGE[0])
+    parser.add_argument("--size-max", type=int, default=DEFAULT_TARGET_SIZE_RANGE[1])
     args = parser.parse_args()
 
     gen_cfg = GenConfig(
         out_dir=REPO_ROOT / args.out_dir,
         canvas_size_range=(args.canvas_min, args.canvas_max),
         symbols_per_canvas_range=(args.symbols_min, args.symbols_max),
+        target_size_range=(args.size_min, args.size_max),
+        reference_dir=Path(args.reference_dir) if args.reference_dir else DEFAULT_REFERENCE_DIR,
     )
 
-    sources, class_names = load_sources()
+    sources, class_names = load_sources(gen_cfg.reference_dir)
     print(f"[synth] {len(sources)} source symbol images across {len(class_names)} classes: {class_names}")
     print(f"[synth] out_dir={gen_cfg.out_dir} symbols_per_canvas={gen_cfg.symbols_per_canvas_range} "
           f"canvas_size={gen_cfg.canvas_size_range}")

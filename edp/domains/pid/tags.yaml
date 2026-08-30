@@ -1,0 +1,71 @@
+# ISA-5.1 instrument-tag / equipment-tag prior for P&ID drawings.
+# Same format and matching rules as the electronic pack's designators.yaml
+# (edp/classify/text_prior.py): letter prefix of a nearby OCR token ->
+# {class: weight}. Extend by editing this file, no code change.
+#
+# ISA-5.1 tag convention: the FIRST letter is the measured variable
+# (P pressure, L level, F flow, T temperature, A analysis, ...) and the
+# SUCCEEDING letters are the function (I indicator, C controller,
+# T transmitter, V valve, S switch, R recorder). Every one of those tag
+# forms is drawn as the same circular "bubble", so they all map to the
+# single Instrument class here — the specific letters don't change the
+# symbol shape, only what it measures.
+
+designators:
+  # --- instrument bubbles: <variable><function>, all -> Instrument ---
+  PC:  {Instrument: 1.0}
+  PT:  {Instrument: 1.0}
+  PI:  {Instrument: 1.0}
+  PIC: {Instrument: 1.0}
+  PS:  {Instrument: 1.0}
+  PDT: {Instrument: 1.0}
+  LC:  {Instrument: 1.0}
+  LT:  {Instrument: 1.0}
+  LI:  {Instrument: 1.0}
+  LIC: {Instrument: 1.0}
+  LS:  {Instrument: 1.0}
+  LG:  {Instrument: 1.0}
+  FC:  {Instrument: 1.0}
+  FT:  {Instrument: 1.0}
+  FI:  {Instrument: 1.0}
+  FIC: {Instrument: 1.0}
+  FQ:  {Instrument: 1.0}
+  TC:  {Instrument: 1.0}
+  TT:  {Instrument: 1.0}
+  TI:  {Instrument: 1.0}
+  TIC: {Instrument: 1.0}
+  TW:  {Instrument: 1.0}
+  AT:  {Instrument: 1.0}
+  AIC: {Instrument: 1.0}
+  # --- control valves: <variable>CV or <variable>V -> Valve_Control ---
+  FCV: {Valve_Control: 1.0}
+  LCV: {Valve_Control: 1.0}
+  PCV: {Valve_Control: 1.0}
+  TCV: {Valve_Control: 1.0}
+  HCV: {Valve_Control: 1.0}
+  FV:  {Valve_Control: 1.0}
+  LV:  {Valve_Control: 1.0}
+  PV:  {Valve_Control: 1.0}
+  # --- equipment tags ---
+  P:   {Pump_Centrifugal: 1.0}
+  PA:  {Pump_Centrifugal: 1.0}
+  GA:  {Pump_Centrifugal: 1.0}
+  K:   {Compressor: 1.0}
+  KA:  {Compressor: 1.0}
+  GB:  {Compressor: 1.0}
+  C:   {Compressor: 0.5, Vessel: 0.5}   # C = compressor or column, genuinely ambiguous
+  E:   {Heat_Exchanger: 1.0}
+  EA:  {Heat_Exchanger: 1.0}
+  HX:  {Heat_Exchanger: 1.0}
+  H:   {Heat_Exchanger: 1.0}
+  V:   {Vessel: 1.0}
+  D:   {Vessel: 1.0}   # D = drum
+  DA:  {Vessel: 1.0}
+  TK:  {Vessel: 1.0}
+  T:   {Vessel: 1.0}   # T = tower/tank (contrast electronic pack, where T is blank)
+  F:   {Filter: 1.0}
+  FL:  {Filter: 1.0}
+  M:   {Motor: 1.0}
+  MO:  {Motor: 1.0}
+
+part_number_families: []

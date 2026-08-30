@@ -29,3 +29,7 @@ evidence_weights:
   "geometry:battery_capacitor": 1.0
   "geometry:bjt_potentiometer": 1.0
   "geometry:npn_pnp": 1.0
+
+# Page-router hints (edp/domains/base.py::route): tokens that show up on
+# electronic schematics but not P&IDs.
+router_keywords: [OHM, UF, PF, NF, MFD, VDC, VAC, MAH, XTAL, MHZ, KHZ, TRANSISTOR, "1W", "1N", BC5, "2N"]

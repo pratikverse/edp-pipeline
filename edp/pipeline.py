@@ -14,7 +14,7 @@ from edp.classify.embedder import Embedder
 from edp.classify.library import ReferenceLibrary
 from edp.classify.match import classify_candidates
 from edp.config import Config
-from edp.domains.base import DomainPack
+from edp.domains.base import DomainPack, route
 from edp.localize import detect_candidates, find_candidates, merge_overlapping
 from edp.realdetect import detect_real
 
@@ -29,7 +29,6 @@ from edp.wires import detect_junction_dots, build_nets, skeletonize_wires, subtr
 def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResult, dict]:
     """Runs the full pipeline on one drawing. Returns (result, timing)."""
     cfg = cfg or Config.load()
-    pack = DomainPack.load(cfg.domain)
     image_path = Path(image_path)
     timing: dict[str, float] = {}
 
@@ -47,13 +46,23 @@ def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResul
         binary, _skew_angle = deskew(binary, cfg.preprocess)
         _blue_mask = blue_layer_mask(img_bgr) if cfg.preprocess.color_layer_split else None
 
+    routed_tokens = None
+    with _stage("route"):
+        if cfg.domain == "auto":
+            domain, route_scores, routed_tokens = route(gray, cfg.text)
+            timing["route_scores"] = route_scores
+        else:
+            domain = cfg.domain
+        pack = DomainPack.load(domain)
+        timing["domain"] = domain
+
     with _stage("text_detect"):
         # OCR runs before localization, not just before association: text
         # glyphs have as many skeleton corners/endpoints as a real symbol,
         # so localization needs the token boxes to exclude them (see
         # localize/proposals.py). Association (id/value assignment) still
         # happens after classification, once symbol bboxes exist.
-        tokens = run_ocr(gray, cfg.text)
+        tokens = routed_tokens if routed_tokens is not None else run_ocr(gray, cfg.text)
         # Junction dots also run early for the same reason: a dot is just
         # as "busy" locally as a real symbol, and without excluding it a
         # nearby symbol's candidate box absorbs the dot plus the wire stub
