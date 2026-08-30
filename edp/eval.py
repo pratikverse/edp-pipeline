@@ -12,12 +12,13 @@ ad-hoc spot-checking:
     make a bad localizer look like a bad classifier), plus a confusion
     list of the actual (predicted, true) mismatches.
 
-Deliberately NOT included yet: connectivity precision/recall. The current
-golden files inherit their `connections` from the pipeline's own output
-rather than independently hand-traced ground truth (see the `_notes`
-field in data/golden/D4.json) -- scoring against that would just be
-comparing the pipeline to itself. Wiring this up is real work for when
-connections are properly hand-verified (docs/08 Phase 2 territory).
+  - Connectivity: net-level precision/recall at the symbol-pair level. Two
+    symbols are "connected" if they share any net; a golden file opts in
+    by setting `"_connectivity_verified": true` (D4). Scored only over
+    pairs whose BOTH endpoints were detected -- a missed symbol is a
+    detection failure, not a connectivity one. A golden without the flag
+    is skipped for connectivity (its `connections` are pipeline-inherited
+    and scoring against them would just compare the pipeline to itself).
 """
 from __future__ import annotations
 
@@ -42,6 +43,13 @@ class EvalResult:
     # (golden_id, predicted_type, true_type) for every matched pair that disagrees
     unmatched_predicted_ids: list[str] = field(default_factory=list)
     unmatched_golden_ids: list[str] = field(default_factory=list)
+    # connectivity (only when the golden opts in via _connectivity_verified)
+    conn_scored: bool = False
+    conn_tp: int = 0
+    conn_fp: int = 0
+    conn_fn: int = 0
+    conn_missing_pairs: list[tuple[str, str]] = field(default_factory=list)  # golden pair not found
+    conn_extra_pairs: list[tuple[str, str]] = field(default_factory=list)    # predicted pair not in golden
 
     @property
     def precision(self) -> float:
@@ -61,6 +69,21 @@ class EvalResult:
     @property
     def classification_accuracy(self) -> float:
         return self.classification_correct / self.classification_total if self.classification_total else 0.0
+
+    @property
+    def conn_precision(self) -> float:
+        d = self.conn_tp + self.conn_fp
+        return self.conn_tp / d if d else 0.0
+
+    @property
+    def conn_recall(self) -> float:
+        d = self.conn_tp + self.conn_fn
+        return self.conn_tp / d if d else 0.0
+
+    @property
+    def conn_f1(self) -> float:
+        p, r = self.conn_precision, self.conn_recall
+        return 2 * p * r / (p + r) if (p + r) else 0.0
 
 
 def _iou(a: list[int], b: list[int]) -> float:
@@ -118,6 +141,8 @@ def evaluate(golden: dict, predicted: dict, drawing_id: str = "") -> EvalResult:
     unmatched_pred_ids = [pred_symbols[pi]["id"] for pi in range(len(pred_symbols)) if pi not in matched_p]
     unmatched_gold_ids = [golden_symbols[gi]["id"] for gi in range(len(golden_symbols)) if gi not in matched_g]
 
+    conn = _score_connectivity(golden, golden_symbols, pred_symbols, matches)
+
     return EvalResult(
         drawing_id=drawing_id,
         num_golden=len(golden_symbols),
@@ -130,7 +155,56 @@ def evaluate(golden: dict, predicted: dict, drawing_id: str = "") -> EvalResult:
         confusions=confusions,
         unmatched_predicted_ids=unmatched_pred_ids,
         unmatched_golden_ids=unmatched_gold_ids,
+        **conn,
     )
+
+
+def _score_connectivity(golden, golden_symbols, pred_symbols, matches) -> dict:
+    """Symbol-pair connectivity: two symbols are connected if they share a
+    net (i.e. each appears in the other's `connections`). Scored only over
+    pairs whose BOTH endpoints were detected -- a missed symbol is a
+    detection failure. Opt-in per golden via `_connectivity_verified`."""
+    if not golden.get("_connectivity_verified"):
+        return {"conn_scored": False}
+
+    g_by_i = {gi: golden_symbols[gi] for gi, _ in matches}
+    p_by_i = {pi: pred_symbols[pi] for _, pi in matches}
+    g2p_id = {golden_symbols[gi]["id"]: pred_symbols[pi]["id"] for gi, pi in matches}
+    matched_g_ids = set(g2p_id)
+
+    def pairs(symbols, keep_ids):
+        out = set()
+        by_id = {s["id"]: s for s in symbols}
+        for s in symbols:
+            if s["id"] not in keep_ids:
+                continue
+            for other in s.get("connections", []):
+                if other not in keep_ids or other == s["id"]:
+                    continue
+                # keep it a real declared edge only if symmetric OR the
+                # other side simply lists nothing back (tolerate asymmetry)
+                out.add(tuple(sorted((s["id"], other))))
+        return out
+
+    golden_pairs = pairs(golden_symbols, matched_g_ids)
+    # translate golden pairs into predicted-id space
+    golden_pairs_p = {tuple(sorted((g2p_id[a], g2p_id[b]))) for a, b in golden_pairs}
+    matched_p_ids = set(g2p_id.values())
+    pred_pairs = pairs(pred_symbols, matched_p_ids)
+
+    tp = golden_pairs_p & pred_pairs
+    fn = golden_pairs_p - pred_pairs
+    fp = pred_pairs - golden_pairs_p
+
+    p2g_id = {v: k for k, v in g2p_id.items()}
+    return {
+        "conn_scored": True,
+        "conn_tp": len(tp),
+        "conn_fp": len(fp),
+        "conn_fn": len(fn),
+        "conn_missing_pairs": sorted((p2g_id[a], p2g_id[b]) for a, b in fn),
+        "conn_extra_pairs": sorted((p2g_id[a], p2g_id[b]) for a, b in fp),
+    }
 
 
 def evaluate_set(golden_dir: str | Path, predicted_dir: str | Path) -> list[EvalResult]:
@@ -206,3 +280,32 @@ def print_report(results: list[EvalResult]) -> None:
             print(f"  [{r.drawing_id}] {pid}")
     if not any_fp:
         print("  (none)")
+
+    conn_results = [r for r in results if r.conn_scored]
+    if conn_results:
+        print("\n" + "=" * 72)
+        print("Connectivity (symbol-pair, both endpoints detected):")
+        print(f"{'drawing':<12}{'pairs_gold':>11}{'TP':>6}{'FP':>6}{'FN':>6}{'P':>8}{'R':>8}{'F1':>8}")
+        c_tp = c_fp = c_fn = 0
+        for r in conn_results:
+            c_tp += r.conn_tp; c_fp += r.conn_fp; c_fn += r.conn_fn
+            print(
+                f"{r.drawing_id:<12}{r.conn_tp + r.conn_fn:>11}{r.conn_tp:>6}{r.conn_fp:>6}"
+                f"{r.conn_fn:>6}{r.conn_precision:>8.3f}{r.conn_recall:>8.3f}{r.conn_f1:>8.3f}"
+            )
+        if len(conn_results) > 1:
+            p = c_tp / (c_tp + c_fp) if (c_tp + c_fp) else 0.0
+            rc = c_tp / (c_tp + c_fn) if (c_tp + c_fn) else 0.0
+            f1 = 2 * p * rc / (p + rc) if (p + rc) else 0.0
+            print("-" * 72)
+            print(f"{'TOTAL':<12}{c_tp + c_fn:>11}{c_tp:>6}{c_fp:>6}{c_fn:>6}{p:>8.3f}{rc:>8.3f}{f1:>8.3f}")
+        print("=" * 72)
+        for r in conn_results:
+            if r.conn_missing_pairs:
+                print(f"\n  [{r.drawing_id}] missed connections (should be linked):")
+                for a, b in r.conn_missing_pairs:
+                    print(f"    {a} -- {b}")
+            if r.conn_extra_pairs:
+                print(f"\n  [{r.drawing_id}] spurious connections (linked but shouldn't be):")
+                for a, b in r.conn_extra_pairs:
+                    print(f"    {a} -- {b}")

@@ -50,3 +50,36 @@ def test_coordinates_shape():
     out = to_json_dict(_sample_result())
     for symbol in out["symbols"]:
         assert len(symbol["coordinates"]) == 4
+
+
+def test_connectivity_eval_scores_pairs():
+    """edp/eval.py net-level connectivity scoring."""
+    from edp.eval import evaluate
+
+    golden = {
+        "_connectivity_verified": True,
+        "symbols": [
+            {"id": "A", "type": "Resistor", "coordinates": [0, 0, 10, 10], "connections": ["B", "C"]},
+            {"id": "B", "type": "Resistor", "coordinates": [20, 0, 30, 10], "connections": ["A"]},
+            {"id": "C", "type": "Resistor", "coordinates": [40, 0, 50, 10], "connections": ["A"]},
+        ],
+    }
+    pred = {
+        "symbols": [
+            {"id": "P1", "type": "Resistor", "coordinates": [0, 0, 10, 10], "connections": ["P2"]},
+            {"id": "P2", "type": "Resistor", "coordinates": [20, 0, 30, 10], "connections": ["P1", "P3"]},
+            {"id": "P3", "type": "Resistor", "coordinates": [40, 0, 50, 10], "connections": ["P2"]},
+        ],
+    }
+    r = evaluate(golden, pred, "t")
+    assert r.conn_scored
+    assert r.conn_tp == 1        # A--B found
+    assert r.conn_fn == 1        # A--C missed
+    assert r.conn_fp == 1        # B--C spurious
+
+
+def test_connectivity_eval_opt_in():
+    from edp.eval import evaluate
+    golden = {"symbols": [{"id": "A", "type": "R", "coordinates": [0, 0, 9, 9], "connections": ["B"]}]}
+    pred = {"symbols": [{"id": "A", "type": "R", "coordinates": [0, 0, 9, 9], "connections": []}]}
+    assert evaluate(golden, pred, "t").conn_scored is False
