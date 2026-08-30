@@ -33,3 +33,7 @@ dependencies:
       - transformers
       - ultralytics
       - faiss-cpu
+      # Roboflow hosted-inference client for the real-data second localizer
+      # (edp/realdetect.py). `roboflow` alone is fine; do NOT add `inference`
+      # — it force-uninstalls the conda opencv and breaks env creation.
+      - roboflow

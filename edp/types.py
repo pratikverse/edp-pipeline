@@ -53,6 +53,12 @@ class Candidate:
     # ~10/16 vs ~7/16 correct with non-overlapping error sets.
     yolo_class: Optional[str] = None
     yolo_confidence: Optional[float] = None
+    # Which localizer proposed this box: "synthetic_yolo" (the in-domain
+    # detector, carries yolo_class/confidence), "real_detector" (an
+    # off-the-shelf detector trained on real circuit photos, used
+    # class-agnostically as a recall booster — see edp/realdetect.py), or
+    # "density" (the classical fallback proposer).
+    source: str = "synthetic_yolo"
 
 
 @dataclass

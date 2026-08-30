@@ -26,6 +26,9 @@ class LocalizeConfig(BaseModel):
     candidate_bbox_pad: int = 4
     candidate_merge_overlap: float = 0.5  # union candidates overlapping more than this (relative to the smaller box)
     use_yolo: bool = True  # YOLO localizer vs. the classical skeleton-density fallback
+    use_real_detector: bool = True  # also run the off-the-shelf real-data detector
+    # (edp/realdetect.py) as a class-agnostic recall booster, if the domain
+    # pack declares one. No-op when it doesn't, or when unreachable.
     # NOTE: the trained weights path is domain-specific and lives in the
     # domain pack (edp/domains/<domain>/pack.yaml), not here.
     yolo_conf_threshold: float = 0.12  # lowered from 0.25: verified on D5 that most of the

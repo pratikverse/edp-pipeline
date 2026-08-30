@@ -15,7 +15,8 @@ from edp.classify.library import ReferenceLibrary
 from edp.classify.match import classify_candidates
 from edp.config import Config
 from edp.domains.base import DomainPack
-from edp.localize import detect_candidates, find_candidates
+from edp.localize import detect_candidates, find_candidates, merge_overlapping
+from edp.realdetect import detect_real
 
 from edp.preprocess import binarize, to_grayscale, deskew, blue_layer_mask
 
@@ -75,6 +76,16 @@ def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResul
             candidates = detect_candidates(img_rgb, cfg.localize, pack.detector_weights)
         else:
             candidates = find_candidates(binary, cfg.localize, text_tokens=tokens, dots=dots)
+
+        # Second localizer: an off-the-shelf detector trained on real
+        # circuits, fused class-agnostically as a recall booster (its boxes
+        # go through the same merge; a box it alone finds is still
+        # classified normally downstream). No-op if the pack declares none
+        # or it's unreachable — see edp/realdetect.py.
+        if cfg.localize.use_real_detector and pack.real_detector is not None:
+            real = detect_real(img_rgb, pack.real_detector)
+            timing["real_detector_boxes"] = len(real)
+            candidates = merge_overlapping(candidates + real, cfg.localize.candidate_merge_overlap)
 
     with _stage("classify"):
         library = ReferenceLibrary.build(pack.reference_dir, cfg.classify)

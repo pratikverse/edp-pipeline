@@ -21,7 +21,8 @@ localize:
   density_merge_kernel: 9     # px; dilation to merge a symbol's own fragmented density blobs
   candidate_bbox_pad: 4       # px; padding added around each density-blob bbox
   candidate_merge_overlap: 0.5 # union candidates overlapping more than this (of the smaller box)
-  use_yolo: true                # experimental branch: YOLO localizer instead of skeleton-density
+  use_yolo: true                # YOLO localizer vs. the classical skeleton-density fallback
+  use_real_detector: false      # MEASURED: off-the-shelf detector hurt F1 on our clean line-art (see docs). Opt-in only.
   yolo_conf_threshold: 0.12  # lowered from 0.25 - was a recall bottleneck, verified on D5
   yolo_iou_threshold: 0.45
 

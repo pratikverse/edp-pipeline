@@ -24,11 +24,20 @@ def merge_overlapping(candidates: list[Candidate], overlap_threshold: float) -> 
                     merged_bbox = _union_bbox(boxes[i].bbox, boxes[j].bbox)
                     kind = boxes[i].kind if boxes[i].kind == boxes[j].kind else "ambiguous"
                     winner = _higher_confidence(boxes[i], boxes[j])
+                    # A class-bearing box always wins the class slot: a
+                    # class-agnostic real_detector box overlapping an
+                    # in-domain synthetic_yolo box keeps the YOLO class.
+                    classed = next(
+                        (b for b in (winner, boxes[i], boxes[j]) if b.yolo_class is not None), winner
+                    )
+                    sources = {boxes[i].source, boxes[j].source}
+                    source = "synthetic_yolo+real_detector" if sources == {"synthetic_yolo", "real_detector"} else winner.source
                     boxes[i] = Candidate(
                         bbox=merged_bbox,
                         kind=kind,
-                        yolo_class=winner.yolo_class,
-                        yolo_confidence=winner.yolo_confidence,
+                        yolo_class=classed.yolo_class,
+                        yolo_confidence=classed.yolo_confidence,
+                        source=source,
                     )
                     del boxes[j]
                     changed = True
@@ -213,7 +222,7 @@ def find_candidates(
 
         region_wire_frac = _wire_fraction(wire_mask, bbox)
         kind = "symbol" if region_wire_frac < 0.5 else "ambiguous"
-        candidates.append(Candidate(bbox=bbox, kind=kind))
+        candidates.append(Candidate(bbox=bbox, kind=kind, source="density"))
 
     return merge_overlapping(candidates, cfg.candidate_merge_overlap)
 
@@ -300,7 +309,7 @@ def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig, weights: str | P
         yolo_class = class_names[int(box.cls[0])]
         yolo_confidence = float(box.conf[0])
         candidates.append(
-            Candidate(bbox=bbox, kind="symbol", yolo_class=yolo_class, yolo_confidence=yolo_confidence)
+            Candidate(bbox=bbox, kind="symbol", yolo_class=yolo_class, yolo_confidence=yolo_confidence, source="synthetic_yolo")
         )
 
     # YOLO's own NMS (iou=cfg.yolo_iou_threshold above) doesn't catch every

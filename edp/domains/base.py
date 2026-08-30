@@ -25,6 +25,8 @@ from pathlib import Path
 
 import yaml
 
+from edp.realdetect import RealDetectorSpec
+
 _DOMAINS_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _DOMAINS_DIR.parents[1]
 
@@ -40,6 +42,7 @@ class DomainPack:
     probe_model_path: Path | None   # linear-probe artifact; None -> source abstains
     evidence_weights: dict[str, float] = field(default_factory=dict)
     specialists_module: str | None = None  # dotted path exposing CONFUSION_GROUPS + select_specialist
+    real_detector: "RealDetectorSpec | None" = None  # off-the-shelf recall-booster detector
 
     @cached_property
     def _specialists(self):
@@ -82,6 +85,7 @@ class DomainPack:
             probe_model_path=(root / probe) if probe else None,
             evidence_weights=dict(d.get("evidence_weights", {})),
             specialists_module=d.get("specialists_module"),
+            real_detector=RealDetectorSpec.from_dict(d.get("real_detector")),
         )
 
 
