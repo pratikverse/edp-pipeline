@@ -77,22 +77,45 @@ are handed to the rest of the pipeline.
 `domain: auto` is the default; electronic `edp eval` is unchanged under it
 (F1 0.879, classification 65.5%).
 
-## First-pass P&ID results
+## First-pass P&ID results — measured
 
-D1–D3 run end to end and produce the JSON + graph. Qualitatively (see
-`outputs/pid_run/*_overlay.png`): instrument bubbles, gate/control
-valves, centrifugal pumps, heat exchangers and vessels are detected and
-mostly typed correctly on D3; the large horizontal separator on D1 is
-missed by the first detector (bigger than its synthetic symbol-size
-range — fixed in a v2 retrain with a wider range). Confusions are the
-expected ones — bubble vs. exchanger and motor vs. exchanger when both
-are circular — exactly what a P&ID geometry specialist would target, and
-`edp/domains/pid/specialists.py` is stubbed for that with the specific
-pairs named.
+`data/golden/D3.json` is a hand-verified golden set (21 real components,
+built the same way as D4/D5: id-only overlay cross-referenced against the
+drawing). `edp eval` on it, with the synthetic P&ID detector and the pid
+pack, **no machinery changes**:
 
-A hand-verified `data/golden/D1.json` (or D3) and a per-domain
-`edp eval` number is the honest next measurement — built the same way as
-D4/D5 (id-only overlay, cross-referenced against the drawing).
+| | D3 |
+|---|---|
+| Detection precision | 0.61 |
+| Detection recall | **0.95** (20 / 21) |
+| Detection F1 | 0.74 |
+| Classification (matched pairs) | 0.55 |
+
+**Recall 0.95 is the headline** — a detector trained only on 900
+procedurally-drawn ISA symbols found almost every real component in a P&ID
+it never saw, which is the "does the generic approach transfer" question
+answered directly.
+
+The two gaps are specific and diagnosable, not vague:
+
+1. **Precision (13 false positives)** — boxes on descriptive text
+   ("Centrifugal Pump", "Air Cooled Exchanger"), on flow arrows, and a few
+   duplicates. The electronic path suppresses text regions before
+   localization (`_strip_text`) and dedups (`merge_overlapping`); wiring a
+   generic OCR-token / arrow suppression into the YOLO path and tightening
+   the merge would remove most of these. Machinery change, so measured and
+   gated like any other.
+2. **Classification (0.55)** — the confusions are almost entirely
+   *circular-equipment*: instrument bubbles (FCV/LCV/HCV) → Heat_Exchanger
+   (3 of 9 errors), Accumulator → Instrument, Motor → Compressor (2). A
+   `bubble-vs-exchanger` specialist (internal zigzag/coil vs. a horizontal
+   divider line or a bare letter-tag) and a `motor` check ("M" glyph
+   present) are exactly the hand-coded-convention case the electronic
+   specialists already established — `edp/domains/pid/specialists.py` is
+   stubbed with these pairs named.
+
+One false negative: the Tray Column (detected, but the box drifted below
+IoU 0.5 against the hand-drawn extent).
 
 ## Why this is the answer to "generic and scalable"
 
