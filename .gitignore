@@ -7,23 +7,30 @@ __pycache__/
 # secrets
 .env
 
-# model weights and generated training data — large, regeneratable
-*.pt
-*.joblib
+# generated / large / non-shipped
 *.onnx
 debug_*.png
 runs/
-outputs/
-
-# local data / problem-statement materials — kept on disk, not in the repo
-/data/
-!/data/golden/
-!/data/golden/**
-/Problem Statement/
-/_baseline/
 /outputs/
-/data/roboflow_raw/
-/data/synth_pid/
-/data/pid_reference/
-scripts/_*.sh
+/_baseline/
 /for me/
+scripts/_*.sh
+/Problem Statement/
+
+# data/: source assets (kicad_raw, reference, pid_reference, validation,
+# golden) and the three shipped model artifacts are tracked. Everything
+# regeneratable is ignored explicitly below.
+/data/roboflow_raw/
+/data/synth/
+/data/synth_pid/
+/data/synth_mixed/
+/data/reference/index.npz
+/data/models/*
+!/data/models/synthetic_yolo_17class.pt
+!/data/models/pid_synthetic_yolo.pt
+!/data/models/linear_probe.joblib
+!/data/models/probe_metadata.json
+
+# ultralytics auto-downloads its COCO base weights into the cwd / weights/
+/yolo*.pt
+/weights/

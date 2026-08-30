@@ -1,0 +1,39 @@
+{
+  "embedding_model": "dinov2_vitb14",
+  "class_names": [
+    "Antenna",
+    "BJT_NPN",
+    "BJT_PNP",
+    "Battery",
+    "Capacitor",
+    "Capacitor_Polarized",
+    "Crystal",
+    "Diode",
+    "Fuse",
+    "Ground",
+    "Inductor",
+    "LED",
+    "Load",
+    "MOSFET_N",
+    "Optocoupler",
+    "Potentiometer",
+    "Relay",
+    "Resistor",
+    "Switch",
+    "Transformer",
+    "Zener"
+  ],
+  "variants_per_source": 40,
+  "mirror": true,
+  "rotations": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "seed": 0,
+  "n_training_crops": 11520,
+  "train_accuracy": 0.9955065359477124,
+  "held_out_synthetic_val_accuracy": 0.9918981481481481,
+  "sklearn_model": "LogisticRegression"
+}
