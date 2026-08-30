@@ -6,22 +6,61 @@ from __future__ import annotations
 # skeleton.py
 # ===========================================================================
 
+import cv2
 import numpy as np
 from skimage.morphology import skeletonize
 
-from edp.types import Symbol
+from edp.types import Symbol, Terminal
+
+_MIN_RUN = 11  # px; a straight ink run at least this long is a candidate wire
+_STUB = 6      # px; how far outside a bbox to check a run continues
 
 
 def subtract_symbols(binary: np.ndarray, symbols: list[Symbol], pad: int = 2) -> np.ndarray:
-    """Zeroes out symbol bboxes so only wire pixels remain."""
-    wire_only = binary.copy()
+    """Removes symbol ink so only wire pixels remain — but keeps wires that
+    merely *pass through* a symbol's bounding box.
+
+    The old version zeroed the whole bbox rectangle. A wide symbol (D4's
+    MOSFET box is 148x180 px) then erased any wire routed near or behind
+    it, silently severing nets (docs/08 section 2.6). Here each bbox is
+    still cleared, then any long straight horizontal/vertical run that
+    entered one side of the box and left the opposite side — i.e. a wire
+    crossing, not the symbol's own body — is restored.
+    """
     h, w = binary.shape[:2]
+    out = binary.copy()
+
+    hk = cv2.getStructuringElement(cv2.MORPH_RECT, (_MIN_RUN, 1))
+    vk = cv2.getStructuringElement(cv2.MORPH_RECT, (1, _MIN_RUN))
+    h_runs = cv2.morphologyEx(binary, cv2.MORPH_OPEN, hk)
+    v_runs = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vk)
+
     for s in symbols:
-        x0, y0, x1, y1 = s.bbox
-        x0, y0 = max(0, x0 - pad), max(0, y0 - pad)
-        x1, y1 = min(w, x1 + pad), min(h, y1 + pad)
-        wire_only[y0:y1, x0:x1] = 0
-    return wire_only
+        bx0, by0, bx1, by1 = s.bbox
+        xa, ya = max(0, bx0 - pad), max(0, by0 - pad)
+        xb, yb = min(w, bx1 + pad), min(h, by1 + pad)
+        if xb <= xa or yb <= ya:
+            continue
+
+        out[ya:yb, xa:xb] = 0
+
+        left_col = binary[ya:yb, max(0, xa - _STUB):xa]
+        right_col = binary[ya:yb, xb:min(w, xb + _STUB)]
+        rows_cross = left_col.any(axis=1) & right_col.any(axis=1)
+        for i, crossing in enumerate(rows_cross):
+            if crossing:
+                r = ya + i
+                out[r, xa:xb] = np.maximum(out[r, xa:xb], h_runs[r, xa:xb])
+
+        top_row = binary[max(0, ya - _STUB):ya, xa:xb]
+        bot_row = binary[yb:min(h, yb + _STUB), xa:xb]
+        cols_cross = top_row.any(axis=0) & bot_row.any(axis=0)
+        for j, crossing in enumerate(cols_cross):
+            if crossing:
+                c = xa + j
+                out[ya:yb, c] = np.maximum(out[ya:yb, c], v_runs[ya:yb, c])
+
+    return out
 
 
 def skeletonize_wires(wire_mask: np.ndarray) -> np.ndarray:
@@ -29,6 +68,106 @@ def skeletonize_wires(wire_mask: np.ndarray) -> np.ndarray:
     bool_mask = wire_mask > 0
     thin = skeletonize(bool_mask)
     return (thin.astype(np.uint8)) * 255
+
+
+def refine_terminals(
+    symbols: list[Symbol], binary: np.ndarray, band: int = 14, min_run: int = 2
+) -> list[Symbol]:
+    """Move each symbol's terminals onto the points where wires actually
+    touch its bounding box, instead of trusting the KiCad template scaled
+    blindly onto the box.
+
+    The template gives the expected terminal *count* and *pin direction*;
+    the box bounds the drawn symbol, but KiCad's normalised pin fractions
+    are relative to a render that also includes the outward pin leads, so
+    the scaled points land inside the body or past the wire end
+    (docs/08 section 2.5 — this is why terminal_snap_radius had to be
+    loosened 12 -> 25 -> 30 px just to catch anything).
+
+    Here: find the ink runs crossing a thin band just outside each of the
+    four box edges (a wire connecting to the symbol), match each to the
+    nearest template terminal, and snap that terminal to the run's
+    midpoint with the edge's outward normal as its direction. Template
+    terminals with no run nearby are left untouched (fallback); runs with
+    no matching template terminal become extra inferred terminals (a
+    4-pin optocoupler matched to a 2-pin template really does have 4
+    connections).
+    """
+    h, w = binary.shape[:2]
+    for s in symbols:
+        x0, y0, x1, y1 = s.bbox
+        attach: list[tuple[int, int, float]] = []  # (x, y, outward_dir_deg)
+
+        # top / bottom edges: scan a horizontal strip, project onto x
+        for edge_y, y_a, y_b, out_dir in (
+            (y0, max(0, y0 - band), y0, 270.0),
+            (y1, y1, min(h, y1 + band), 90.0),
+        ):
+            if y_b <= y_a:
+                continue
+            col_has = (binary[y_a:y_b, x0:x1] > 0).any(axis=0)
+            for c0, c1 in _runs(col_has, min_run):
+                attach.append((x0 + (c0 + c1) // 2, edge_y, out_dir))
+
+        # left / right edges: scan a vertical strip, project onto y
+        for edge_x, x_a, x_b, out_dir in (
+            (x0, max(0, x0 - band), x0, 180.0),
+            (x1, x1, min(w, x1 + band), 0.0),
+        ):
+            if x_b <= x_a:
+                continue
+            row_has = (binary[y0:y1, x_a:x_b] > 0).any(axis=1)
+            for r0, r1 in _runs(row_has, min_run):
+                attach.append((edge_x, y0 + (r0 + r1) // 2, out_dir))
+
+        if not attach:
+            continue
+
+        used: set[int] = set()
+        for term in s.terminals:
+            tx, ty = term.point
+            order = sorted(
+                range(len(attach)),
+                key=lambda i: (attach[i][0] - tx) ** 2 + (attach[i][1] - ty) ** 2,
+            )
+            for i in order:
+                if i in used:
+                    continue
+                used.add(i)
+                px, py, out_dir = attach[i]
+                term.point = (px, py)
+                term.direction_deg = out_dir
+                term.source = "inferred"
+                break
+
+        for i, (px, py, out_dir) in enumerate(attach):
+            if i in used:
+                continue
+            s.terminals.append(
+                Terminal(
+                    symbol_id=s.id,
+                    index=len(s.terminals),
+                    point=(px, py),
+                    source="inferred",
+                    direction_deg=out_dir,
+                )
+            )
+    return symbols
+
+
+def _runs(mask_1d: np.ndarray, min_len: int) -> list[tuple[int, int]]:
+    """[(start, end)] index ranges of contiguous True runs at least min_len long."""
+    out = []
+    idx = np.flatnonzero(mask_1d)
+    if len(idx) == 0:
+        return out
+    breaks = np.flatnonzero(np.diff(idx) > 1)
+    starts = np.concatenate(([0], breaks + 1))
+    ends = np.concatenate((breaks, [len(idx) - 1]))
+    for s, e in zip(starts, ends):
+        if idx[e] - idx[s] + 1 >= min_len:
+            out.append((int(idx[s]), int(idx[e])))
+    return out
 
 # ===========================================================================
 # junctions.py

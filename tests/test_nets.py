@@ -46,3 +46,35 @@ def test_t_junction_without_dot_defaults_connected():
     cfg = WiresConfig()
     nets = build_nets(img, dots=[], symbols=[], cfg=cfg)
     assert len(nets) == 1
+
+
+def test_refine_terminals_snaps_to_wire_attach_point():
+    """refine_terminals moves a template terminal onto where a wire
+    actually touches the bounding box."""
+    import numpy as np
+    from edp.types import Symbol, Terminal
+    from edp.wires import refine_terminals
+
+    binary = np.zeros((60, 60), np.uint8)
+    # a horizontal wire entering the left edge of a box at y=30
+    binary[29:31, 0:22] = 255
+    # box is x[20..40] y[20..40]; template terminal wrongly placed at centre
+    sym = Symbol(id="S", type="Resistor", bbox=(20, 20, 40, 40),
+                 terminals=[Terminal(symbol_id="S", index=0, point=(30, 30), source="library")])
+    refine_terminals([sym], binary, band=10)
+    tx, ty = sym.terminals[0].point
+    assert tx == 20 and abs(ty - 30) <= 2          # snapped to the left edge at the wire
+    assert sym.terminals[0].direction_deg == 180.0  # outward = left
+    assert sym.terminals[0].source == "inferred"
+
+
+def test_refine_terminals_noop_without_wires():
+    import numpy as np
+    from edp.types import Symbol, Terminal
+    from edp.wires import refine_terminals
+
+    binary = np.zeros((60, 60), np.uint8)
+    sym = Symbol(id="S", type="Resistor", bbox=(20, 20, 40, 40),
+                 terminals=[Terminal(symbol_id="S", index=0, point=(30, 30), source="library")])
+    refine_terminals([sym], binary)
+    assert sym.terminals[0].point == (30, 30)  # untouched

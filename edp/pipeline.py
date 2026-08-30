@@ -24,7 +24,7 @@ from edp.ocr import run_ocr, associate_tokens, nearby_token_text
 
 from edp.types import DrawingResult
 from edp.validate import validate
-from edp.wires import detect_junction_dots, build_nets, skeletonize_wires, subtract_symbols
+from edp.wires import detect_junction_dots, build_nets, skeletonize_wires, subtract_symbols, refine_terminals
 
 def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResult, dict]:
     """Runs the full pipeline on one drawing. Returns (result, timing)."""
@@ -117,6 +117,7 @@ def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResul
     with _stage("wires"):
         wire_mask = subtract_symbols(binary, symbols)
         skeleton = skeletonize_wires(wire_mask)
+        symbols = refine_terminals(symbols, binary)
         nets = build_nets(skeleton, dots, symbols, cfg.wires)
 
     with _stage("validate"):

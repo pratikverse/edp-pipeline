@@ -49,12 +49,14 @@ wires:
   junction_dot_min_radius: 2
   junction_dot_max_radius: 5
   junction_dot_fill_ratio: 0.6    # min fraction of local disk that must be ink to count as a dot
-  terminal_snap_radius: 30       # isotropic fallback, only used when a terminal
-                                  # has no known pin direction (inferred terminals)
-  terminal_directional_reach: 45 # px; search distance along a KNOWN pin direction —
-                                  # can extend further than the isotropic radius since
-                                  # the search is restricted to a narrow cone, not a
-                                  # full circle, so false-positive risk stays low
+  terminal_snap_radius: 12       # isotropic fallback for a terminal with no known
+                                  # pin direction. Tightened from 30 once wires.refine_terminals
+                                  # started placing terminals on the actual wire-attach
+                                  # point rather than a blindly-scaled KiCad fraction
+                                  # (docs/13) -- the loose 30 was a symptom of that.
+  terminal_directional_reach: 25 # px; search distance along a KNOWN pin direction,
+                                  # restricted to a narrow cone so the reach can exceed
+                                  # the isotropic radius without the false-positive risk
   terminal_snap_cone_deg: 70     # full angular width of the directional search cone
   skeleton_prune_min_length: 3
 

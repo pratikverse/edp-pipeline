@@ -1,24 +1,342 @@
 {
-  "_notes": "Hand-verified golden set for D4.png. Ids/coordinates from the pipeline's own detections, TYPE corrected by visual inspection. CONNECTIONS hand-traced from the schematic 2026-08-30, net by net. Key structural fact: IC1 is an optocoupler, so the input side (S1, R1, IC1 pins 1/2, BATT-13V) is galvanically isolated from the output side -- the bottom rail is TWO separate segments (verified at the pin 2 / pin 4 junction, there is a visible gap), so BATT-13V shares a node only with IC1, not with the 224V side. Nets: N_SW(S1-R1), N_LED(R1-IC1 pin1), N_GND_IN(BATT-13V - / IC1 pin2), N_GND_OUT(IC1 pin4, T1 emitter, T3, T4 source, BATT-224V -), N_T1B(R3-T1 base-IC1 pin5), N_T1C(R2-T1 collector-R4 left), N_T2B(R4 right-T2 base), N_TOP(+V rail before R6: R2/R3 top, T2 collector, C1+, ZD1 top, R6 left), N_TOP_B(after R6: LOAD top, D1 cathode, BATT-224V+), N_OUT(T2/T3 emitters-R5 left), N_GATE(R5 right, C1-, ZD1 bottom, T4 gate), N_DRAIN(LOAD bottom, D1 anode, T4 drain). Confidence ~85%: the T1/R4 and R5/gate routing are dense and a couple of terminal assignments are judgement calls. ZD1 and D1 are pipeline misses, kept with estimated coordinates as false negatives; connectivity is scored only over pairs whose both endpoints were detected, so ZD1/D1 pairs are skipped, not penalised. SYM_015 (a duplicate box on IC1) is intentionally omitted.",
+  "_notes": "Hand-verified golden set for D4.png. Ids/coordinates from the pipeline's own detections, TYPE corrected by visual inspection. CONNECTIONS hand-traced from the schematic 2026-08-30, net by net. Key structural fact: IC1 is an optocoupler, so the input side (S1, R1, IC1 pins 1/2, BATT-13V) is galvanically isolated from the output side -- the bottom rail is TWO separate segments (verified at the pin 2 / pin 4 junction, there is a visible gap), so BATT-13V shares a node only with IC1, not with the 224V side. Nets: N_SW(BATT-13V+ - S1 - R1: S1's other side goes to the +13V battery terminal), N_LED(R1-IC1 pin1), N_GND_IN(BATT-13V - / IC1 pin2), N_GND_OUT(IC1 pin4, T1 emitter, T3, T4 source, BATT-224V -), N_T1B(R3-T1 base-IC1 pin5), N_T1C(R2-T1 collector-R4 left), N_T2B(R4 right-T2 base), N_TOP(+V rail before R6: R2/R3 top, T2 collector, C1+, ZD1 top, R6 left), N_TOP_B(after R6: LOAD top, D1 cathode, BATT-224V+), N_OUT(T2/T3 emitters-R5 left), N_GATE(R5 right, C1-, ZD1 bottom, T4 gate), N_DRAIN(LOAD bottom, D1 anode, T4 drain). Confidence ~85%: the T1/R4 and R5/gate routing are dense and a couple of terminal assignments are judgement calls. ZD1 and D1 are pipeline misses, kept with estimated coordinates as false negatives; connectivity is scored only over pairs whose both endpoints were detected, so ZD1/D1 pairs are skipped, not penalised. SYM_015 (a duplicate box on IC1) is intentionally omitted.",
   "_connectivity_verified": true,
   "symbols": [
-    {"id": "SYM_000", "type": "Resistor",          "coordinates": [593,244,680,276], "connections": ["SYM_011","SYM_002","SYM_013","R2b_ZD1_estimated","SYM_008"], "note": "R5 100R"},
-    {"id": "SYM_001", "type": "Resistor",          "coordinates": [360,140,461,188], "connections": ["R2","SYM_007","SYM_011"], "note": "R4 220R -- T1 collector to T2 base"},
-    {"id": "SYM_002", "type": "BJT_PNP",           "coordinates": [454,306,550,399], "connections": ["SYM_012","SYM_007","SYM_008","SYM_006","SYM_011","SYM_000"], "note": "T3 BC557"},
-    {"id": "SYM_003", "type": "Resistor",          "coordinates": [297,34,363,141],  "connections": ["SYM_007","SYM_012","R2","SYM_011","SYM_013","R2b_ZD1_estimated","R6"], "note": "R3 1K"},
-    {"id": "SYM_004", "type": "Load",              "coordinates": [821,12,858,152],  "connections": ["R6","D1_estimated","SYM_006","SYM_008"], "note": "LOAD block"},
-    {"id": "R1",      "type": "Resistor",          "coordinates": [149,85,179,201],  "connections": ["SYM_010","SYM_012"], "note": "R1 220R"},
-    {"id": "SYM_006", "type": "Battery",           "coordinates": [962,204,1000,319],"connections": ["SYM_012","SYM_007","SYM_002","SYM_008","R6","SYM_004","D1_estimated"], "note": "BATT-224V14AH"},
-    {"id": "SYM_007", "type": "BJT_NPN",           "coordinates": [277,173,365,253], "connections": ["SYM_012","SYM_002","SYM_008","SYM_006","SYM_003","R2","SYM_001"], "note": "T1 BC548"},
-    {"id": "SYM_008", "type": "MOSFET_N",          "coordinates": [771,259,919,439], "connections": ["SYM_012","SYM_007","SYM_002","SYM_006","SYM_000","SYM_013","R2b_ZD1_estimated","SYM_004","D1_estimated"], "note": "T4 IR540"},
-    {"id": "R2",      "type": "Resistor",          "coordinates": [222,43,289,140],  "connections": ["SYM_007","SYM_001","SYM_003","SYM_011","SYM_013","R2b_ZD1_estimated","R6"], "note": "R2 10K -- T1 collector load"},
-    {"id": "SYM_010", "type": "Switch",            "coordinates": [6,0,136,67],      "connections": ["R1"], "note": "S1 ON/OFF"},
-    {"id": "SYM_011", "type": "BJT_NPN",           "coordinates": [455,104,553,199], "connections": ["SYM_001","R2","SYM_003","SYM_013","R2b_ZD1_estimated","R6","SYM_002","SYM_000"], "note": "T2 BC547"},
-    {"id": "SYM_012", "type": "Optocoupler",       "coordinates": [143,280,231,384], "connections": ["R1","SYM_016","SYM_007","SYM_002","SYM_008","SYM_006","SYM_003"], "note": "IC1 MCT2E -- isolation boundary"},
-    {"id": "SYM_013", "type": "Capacitor_Polarized","coordinates": [564,60,669,149], "connections": ["R2","SYM_003","SYM_011","R2b_ZD1_estimated","R6","SYM_000","SYM_008"], "note": "C1 10uF 50V"},
-    {"id": "R6",      "type": "Resistor",          "coordinates": [730,0,799,100],   "connections": ["R2","SYM_003","SYM_011","SYM_013","R2b_ZD1_estimated","SYM_004","D1_estimated","SYM_006"], "note": "R6 330R -- in the +V rail"},
-    {"id": "R2b_ZD1_estimated", "type": "Zener",   "coordinates": [700,60,730,150],  "connections": ["R2","SYM_003","SYM_011","SYM_013","R6","SYM_000","SYM_008"], "note": "ZD1 12V 1W -- MISSING from pipeline output; coordinates estimated"},
-    {"id": "D1_estimated", "type": "Diode",        "coordinates": [890,60,920,150],  "connections": ["R6","SYM_004","SYM_006","SYM_008"], "note": "D1 1N4007 -- flyback; MISSING from pipeline output; coordinates estimated"},
-    {"id": "SYM_016", "type": "Battery",           "coordinates": [0,188,44,259],    "connections": ["SYM_012"], "note": "BATT-13V -- isolated input-side ground, only touches IC1"}
+    {
+      "id": "SYM_000",
+      "type": "Resistor",
+      "coordinates": [
+        593,
+        244,
+        680,
+        276
+      ],
+      "connections": [
+        "SYM_011",
+        "SYM_002",
+        "SYM_013",
+        "R2b_ZD1_estimated",
+        "SYM_008"
+      ],
+      "note": "R5 100R"
+    },
+    {
+      "id": "SYM_001",
+      "type": "Resistor",
+      "coordinates": [
+        360,
+        140,
+        461,
+        188
+      ],
+      "connections": [
+        "R2",
+        "SYM_007",
+        "SYM_011"
+      ],
+      "note": "R4 220R -- T1 collector to T2 base"
+    },
+    {
+      "id": "SYM_002",
+      "type": "BJT_PNP",
+      "coordinates": [
+        454,
+        306,
+        550,
+        399
+      ],
+      "connections": [
+        "SYM_012",
+        "SYM_007",
+        "SYM_008",
+        "SYM_006",
+        "SYM_011",
+        "SYM_000"
+      ],
+      "note": "T3 BC557"
+    },
+    {
+      "id": "SYM_003",
+      "type": "Resistor",
+      "coordinates": [
+        297,
+        34,
+        363,
+        141
+      ],
+      "connections": [
+        "SYM_007",
+        "SYM_012",
+        "R2",
+        "SYM_011",
+        "SYM_013",
+        "R2b_ZD1_estimated",
+        "R6"
+      ],
+      "note": "R3 1K"
+    },
+    {
+      "id": "SYM_004",
+      "type": "Load",
+      "coordinates": [
+        821,
+        12,
+        858,
+        152
+      ],
+      "connections": [
+        "R6",
+        "D1_estimated",
+        "SYM_006",
+        "SYM_008"
+      ],
+      "note": "LOAD block"
+    },
+    {
+      "id": "R1",
+      "type": "Resistor",
+      "coordinates": [
+        149,
+        85,
+        179,
+        201
+      ],
+      "connections": [
+        "SYM_010",
+        "SYM_012"
+      ],
+      "note": "R1 220R"
+    },
+    {
+      "id": "SYM_006",
+      "type": "Battery",
+      "coordinates": [
+        962,
+        204,
+        1000,
+        319
+      ],
+      "connections": [
+        "SYM_012",
+        "SYM_007",
+        "SYM_002",
+        "SYM_008",
+        "R6",
+        "SYM_004",
+        "D1_estimated"
+      ],
+      "note": "BATT-224V14AH"
+    },
+    {
+      "id": "SYM_007",
+      "type": "BJT_NPN",
+      "coordinates": [
+        277,
+        173,
+        365,
+        253
+      ],
+      "connections": [
+        "SYM_012",
+        "SYM_002",
+        "SYM_008",
+        "SYM_006",
+        "SYM_003",
+        "R2",
+        "SYM_001"
+      ],
+      "note": "T1 BC548"
+    },
+    {
+      "id": "SYM_008",
+      "type": "MOSFET_N",
+      "coordinates": [
+        771,
+        259,
+        919,
+        439
+      ],
+      "connections": [
+        "SYM_012",
+        "SYM_007",
+        "SYM_002",
+        "SYM_006",
+        "SYM_000",
+        "SYM_013",
+        "R2b_ZD1_estimated",
+        "SYM_004",
+        "D1_estimated"
+      ],
+      "note": "T4 IR540"
+    },
+    {
+      "id": "R2",
+      "type": "Resistor",
+      "coordinates": [
+        222,
+        43,
+        289,
+        140
+      ],
+      "connections": [
+        "SYM_007",
+        "SYM_001",
+        "SYM_003",
+        "SYM_011",
+        "SYM_013",
+        "R2b_ZD1_estimated",
+        "R6"
+      ],
+      "note": "R2 10K -- T1 collector load"
+    },
+    {
+      "id": "SYM_010",
+      "type": "Switch",
+      "coordinates": [
+        6,
+        0,
+        136,
+        67
+      ],
+      "connections": [
+        "R1",
+        "SYM_016"
+      ],
+      "note": "S1 ON/OFF"
+    },
+    {
+      "id": "SYM_011",
+      "type": "BJT_NPN",
+      "coordinates": [
+        455,
+        104,
+        553,
+        199
+      ],
+      "connections": [
+        "SYM_001",
+        "R2",
+        "SYM_003",
+        "SYM_013",
+        "R2b_ZD1_estimated",
+        "R6",
+        "SYM_002",
+        "SYM_000"
+      ],
+      "note": "T2 BC547"
+    },
+    {
+      "id": "SYM_012",
+      "type": "Optocoupler",
+      "coordinates": [
+        143,
+        280,
+        231,
+        384
+      ],
+      "connections": [
+        "R1",
+        "SYM_016",
+        "SYM_007",
+        "SYM_002",
+        "SYM_008",
+        "SYM_006",
+        "SYM_003"
+      ],
+      "note": "IC1 MCT2E -- isolation boundary"
+    },
+    {
+      "id": "SYM_013",
+      "type": "Capacitor_Polarized",
+      "coordinates": [
+        564,
+        60,
+        669,
+        149
+      ],
+      "connections": [
+        "R2",
+        "SYM_003",
+        "SYM_011",
+        "R2b_ZD1_estimated",
+        "R6",
+        "SYM_000",
+        "SYM_008"
+      ],
+      "note": "C1 10uF 50V"
+    },
+    {
+      "id": "R6",
+      "type": "Resistor",
+      "coordinates": [
+        730,
+        0,
+        799,
+        100
+      ],
+      "connections": [
+        "R2",
+        "SYM_003",
+        "SYM_011",
+        "SYM_013",
+        "R2b_ZD1_estimated",
+        "SYM_004",
+        "D1_estimated",
+        "SYM_006"
+      ],
+      "note": "R6 330R -- in the +V rail"
+    },
+    {
+      "id": "R2b_ZD1_estimated",
+      "type": "Zener",
+      "coordinates": [
+        700,
+        60,
+        730,
+        150
+      ],
+      "connections": [
+        "R2",
+        "SYM_003",
+        "SYM_011",
+        "SYM_013",
+        "R6",
+        "SYM_000",
+        "SYM_008"
+      ],
+      "note": "ZD1 12V 1W -- MISSING from pipeline output; coordinates estimated"
+    },
+    {
+      "id": "D1_estimated",
+      "type": "Diode",
+      "coordinates": [
+        890,
+        60,
+        920,
+        150
+      ],
+      "connections": [
+        "R6",
+        "SYM_004",
+        "SYM_006",
+        "SYM_008"
+      ],
+      "note": "D1 1N4007 -- flyback; MISSING from pipeline output; coordinates estimated"
+    },
+    {
+      "id": "SYM_016",
+      "type": "Battery",
+      "coordinates": [
+        0,
+        188,
+        44,
+        259
+      ],
+      "connections": [
+        "SYM_012",
+        "SYM_010"
+      ],
+      "note": "BATT-13V -- isolated input-side ground, only touches IC1"
+    }
   ]
 }
