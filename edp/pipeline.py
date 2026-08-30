@@ -14,19 +14,15 @@ from edp.classify.embedder import Embedder
 from edp.classify.library import ReferenceLibrary
 from edp.classify.match import classify_candidates
 from edp.config import Config
-from edp.detect.yolo_detect import detect_candidates
-from edp.localize.proposals import find_candidates
-from edp.preprocess.binarize import binarize, to_grayscale
-from edp.preprocess.deskew import deskew
-from edp.preprocess.layers import blue_layer_mask
-from edp.text.associate import associate_tokens, nearby_token_text
-from edp.text.ocr import run_ocr
-from edp.types import DrawingResult
-from edp.validate.checks import validate
-from edp.wires.junctions import detect_junction_dots
-from edp.wires.nets import build_nets
-from edp.wires.skeleton import skeletonize_wires, subtract_symbols
+from edp.localize import detect_candidates, find_candidates
 
+from edp.preprocess import binarize, to_grayscale, deskew, blue_layer_mask
+
+from edp.ocr import run_ocr, associate_tokens, nearby_token_text
+
+from edp.types import DrawingResult
+from edp.validate import validate
+from edp.wires import detect_junction_dots, build_nets, skeletonize_wires, subtract_symbols
 
 def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResult, dict]:
     """Runs the full pipeline on one drawing. Returns (result, timing)."""
@@ -111,7 +107,6 @@ def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResul
         pipeline_version=cfg.output.pipeline_version,
     )
     return result, timing
-
 
 class _Timer:
     def __init__(self, name: str, sink: dict):

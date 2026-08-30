@@ -24,7 +24,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from edp.config import Config  # noqa: E402
-from edp.emit.json_out import to_json_dict  # noqa: E402
 from edp.pipeline import run  # noqa: E402
 
 

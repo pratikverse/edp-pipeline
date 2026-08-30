@@ -1,0 +1,318 @@
+"""Stage 2 - symbol localization. Shipped path is the synthetic-trained YOLO
+detector (detect_candidates); a classical skeleton-density proposer
+(find_candidates) is the no-weights fallback. merge_overlapping is shared."""
+from __future__ import annotations
+
+
+# ===========================================================================
+# merge.py
+# ===========================================================================
+
+from edp.types import BBox, Candidate
+
+
+def merge_overlapping(candidates: list[Candidate], overlap_threshold: float) -> list[Candidate]:
+    """Repeatedly unions any pair of candidates whose overlap relative to
+    the smaller box exceeds the threshold, until no pair does."""
+    boxes = list(candidates)
+    changed = True
+    while changed and len(boxes) > 1:
+        changed = False
+        for i in range(len(boxes)):
+            for j in range(i + 1, len(boxes)):
+                if _overlap_ratio(boxes[i].bbox, boxes[j].bbox) >= overlap_threshold:
+                    merged_bbox = _union_bbox(boxes[i].bbox, boxes[j].bbox)
+                    kind = boxes[i].kind if boxes[i].kind == boxes[j].kind else "ambiguous"
+                    winner = _higher_confidence(boxes[i], boxes[j])
+                    boxes[i] = Candidate(
+                        bbox=merged_bbox,
+                        kind=kind,
+                        yolo_class=winner.yolo_class,
+                        yolo_confidence=winner.yolo_confidence,
+                    )
+                    del boxes[j]
+                    changed = True
+                    break
+            if changed:
+                break
+    return boxes
+
+
+def _higher_confidence(a: Candidate, b: Candidate) -> Candidate:
+    conf_a = a.yolo_confidence if a.yolo_confidence is not None else -1.0
+    conf_b = b.yolo_confidence if b.yolo_confidence is not None else -1.0
+    return a if conf_a >= conf_b else b
+
+
+def _overlap_ratio(a: BBox, b: BBox) -> float:
+    ax0, ay0, ax1, ay1 = a
+    bx0, by0, bx1, by1 = b
+    ix0, iy0 = max(ax0, bx0), max(ay0, by0)
+    ix1, iy1 = min(ax1, bx1), min(ay1, by1)
+    if ix1 <= ix0 or iy1 <= iy0:
+        return 0.0
+    intersection = (ix1 - ix0) * (iy1 - iy0)
+    smaller_area = min((ax1 - ax0) * (ay1 - ay0), (bx1 - bx0) * (by1 - by0))
+    return intersection / smaller_area if smaller_area > 0 else 0.0
+
+
+def _union_bbox(a: BBox, b: BBox) -> BBox:
+    return (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
+
+# ===========================================================================
+# morphology.py
+# ===========================================================================
+
+import cv2
+import numpy as np
+
+from edp.config import LocalizeConfig
+
+
+def thick_symbol_mask(binary: np.ndarray, cfg: LocalizeConfig) -> np.ndarray:
+    """Isolates thick/enclosed regions (candidate symbol bodies) via
+    morphological opening: a kernel wider than typical wire thickness
+    erases thin strokes entirely while thick shapes survive. This is what
+    breaks the connectivity between a symbol and the wires touching it, so
+    each symbol becomes its own connected component — the whole point of
+    the wire/symbol split (docs/01 stage 2). Contours must be extracted
+    from *this* mask, not from the full binary, or a drawing where every
+    symbol is wired to its neighbours collapses into one giant blob."""
+    k = cfg.thin_stroke_max_width
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    opened = cv2.erode(binary, kernel, iterations=1)
+    opened = cv2.dilate(opened, kernel, iterations=1)
+    return opened
+
+
+def thin_stroke_mask(binary: np.ndarray, cfg: LocalizeConfig) -> np.ndarray:
+    """Wire-only mask: pixels present in `binary` but not in the thick
+    symbol mask were part of a stroke thinner than the kernel."""
+    thick = thick_symbol_mask(binary, cfg)
+    return cv2.subtract(binary, thick)
+
+# ===========================================================================
+# proposals.py
+# ===========================================================================
+
+import cv2
+import numpy as np
+from scipy.ndimage import convolve
+from skimage.morphology import skeletonize
+
+from edp.config import LocalizeConfig
+from edp.types import BBox, Candidate, Point, TextToken
+
+# merge_overlapping: defined above
+# thin_stroke_mask / thick_symbol_mask: defined above
+
+_NEIGHBOR_KERNEL = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])
+
+
+def _strip_text(binary: np.ndarray, text_tokens: list[TextToken] | None, pad: int = 2) -> np.ndarray:
+    """Text glyphs have just as many skeleton corners/endpoints as a real
+    symbol, so without this, every label becomes a false candidate (see
+    debug run during Day 1 tuning). OCR tokens are optional — if none are
+    supplied, localization simply runs uncorrected for that noise source."""
+    if not text_tokens:
+        return binary
+    stripped = binary.copy()
+    h, w = binary.shape[:2]
+    for token in text_tokens:
+        x0, y0, x1, y1 = token.bbox
+        x0, y0 = max(0, x0 - pad), max(0, y0 - pad)
+        x1, y1 = min(w, x1 + pad), min(h, y1 + pad)
+        stripped[y0:y1, x0:x1] = 0
+    return stripped
+
+
+def _strip_dots(binary: np.ndarray, dots: list[Point], radius_pad: int = 3) -> np.ndarray:
+    """A junction dot is a small solid disk at a branch point — locally
+    just as "complex" as a real symbol, so without this it gets absorbed
+    into whichever nearby symbol's density blob it's closest to, dragging
+    that candidate's bbox out to include the dot and the wire stub
+    leading to it (verified: this was why R1 in D5 cropped mostly wire and
+    two junction dots, with only a sliver of the actual resistor).
+    Junction dots are detected once, upstream, since the same detection
+    is needed again in wires/junctions.py for connectivity."""
+    if not dots:
+        return binary
+    stripped = binary.copy()
+    for dx, dy in dots:
+        cv2.circle(stripped, (dx, dy), radius_pad, 0, thickness=-1)
+    return stripped
+
+
+def _interest_points(binary: np.ndarray) -> np.ndarray:
+    """Skeleton pixels that are a branch (degree>=3) or an endpoint
+    (degree==1) — the raw "corner" signal everything else in this module
+    is built from."""
+    skeleton = skeletonize(binary > 0).astype(np.uint8)
+    degree = convolve(skeleton, _NEIGHBOR_KERNEL, mode="constant", cval=0) * skeleton
+    return ((degree >= 3) | (degree == 1)).astype(np.uint8)
+
+
+def _density_map(interest_points: np.ndarray, window: int) -> np.ndarray:
+    return cv2.boxFilter(interest_points.astype(np.float32), -1, (window, window), normalize=False)
+
+
+def _corner_count(interest_points: np.ndarray, bbox: BBox) -> int:
+    """Number of *distinct* corners within a bbox, not raw interest-pixel
+    count: a single branch point can mark several adjacent skeleton
+    pixels, which would otherwise inflate one corner into several. This
+    is the direct fix for the dominant false-positive pattern — a plain
+    wire bend or T-junction has exactly one corner and was being kept as
+    a candidate by the windowed density check alone; a real symbol
+    (zigzag, circle-with-leads, box) clusters several. Confirmed on D4:
+    every rail-bend false positive audited had a single corner in its
+    final bbox, while every real symbol had 3 or more.
+    """
+    x0, y0, x1, y1 = bbox
+    region = interest_points[y0:y1, x0:x1]
+    if region.size == 0:
+        return 0
+    num_labels, _ = cv2.connectedComponents(region, connectivity=8)
+    return num_labels - 1  # exclude background label
+
+
+def find_candidates(
+    binary: np.ndarray,
+    cfg: LocalizeConfig,
+    text_tokens: list[TextToken] | None = None,
+    dots: list[Point] | None = None,
+) -> list[Candidate]:
+    """Returns candidate bounding boxes, area-filtered.
+
+    `kind` is a coarse hint (symbol/wire/ambiguous) based on area relative
+    to the wire mask, used to prioritise stage-3 classification attempts —
+    it is not a final decision, stage 3 owns that.
+
+    Known limitation: dashed-outline symbols with sparse geometry (D5's
+    SHIELD boundary) sit right at the density threshold and are unreliable.
+    Tracked in docs/05.
+    """
+    clean = _strip_dots(_strip_text(binary, text_tokens), dots)
+    density = _density_map(clean, window=cfg.density_window)
+
+    mask = (density >= cfg.density_threshold).astype(np.uint8) * 255
+    mask = cv2.dilate(mask, np.ones((cfg.density_merge_kernel, cfg.density_merge_kernel), np.uint8))
+
+    num_labels, labels, stats, _centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    wire_mask = thin_stroke_mask(binary, cfg)
+
+    candidates: list[Candidate] = []
+    pad = cfg.candidate_bbox_pad
+    h, w = binary.shape[:2]
+    for label in range(1, num_labels):
+        x, y, cw, ch, _area = (int(v) for v in stats[label])
+        loose_bbox: BBox = (max(0, x - pad), max(0, y - pad), min(w, x + cw + pad), min(h, y + ch + pad))
+        bbox = _tighten_to_ink(clean, loose_bbox, pad=pad)
+        box_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+        if box_area < cfg.min_component_area or box_area > cfg.max_component_area:
+            continue
+
+        region_wire_frac = _wire_fraction(wire_mask, bbox)
+        kind = "symbol" if region_wire_frac < 0.5 else "ambiguous"
+        candidates.append(Candidate(bbox=bbox, kind=kind))
+
+    return merge_overlapping(candidates, cfg.candidate_merge_overlap)
+
+
+def _tighten_to_ink(binary: np.ndarray, loose_bbox: BBox, pad: int) -> BBox:
+    """Shrinks a density-blob bbox down to the actual ink pixels it
+    contains: the density window/merge-dilation inflate the box well
+    beyond the true symbol extent. Bounded by construction — a stray wire
+    running through the loose region can only pull the tightened box back
+    out to `loose_bbox`, never further, unlike a full-image connectivity
+    approach (see morphology.py's rejected thick/thin split)."""
+    x0, y0, x1, y1 = loose_bbox
+    h, w = binary.shape[:2]
+    region = binary[y0:y1, x0:x1]
+    ys, xs = np.where(region > 0)
+    if len(xs) == 0:
+        return loose_bbox
+    tx0, tx1 = x0 + int(xs.min()), x0 + int(xs.max()) + 1
+    ty0, ty1 = y0 + int(ys.min()), y0 + int(ys.max()) + 1
+    return (
+        max(0, tx0 - pad),
+        max(0, ty0 - pad),
+        min(w, tx1 + pad),
+        min(h, ty1 + pad),
+    )
+
+
+def _wire_fraction(wire_mask: np.ndarray, bbox: BBox) -> float:
+    x0, y0, x1, y1 = bbox
+    region = wire_mask[y0:y1, x0:x1]
+    if region.size == 0:
+        return 0.0
+    return float(np.count_nonzero(region)) / region.size
+
+# ===========================================================================
+# yolo_detect.py
+# ===========================================================================
+
+from functools import lru_cache
+from pathlib import Path
+
+import numpy as np
+
+from edp.config import LocalizeConfig
+# merge_overlapping: defined above
+from edp.types import BBox, Candidate
+
+
+@lru_cache(maxsize=1)
+def _load_model(weights_path: str):
+    from ultralytics import YOLO
+
+    return YOLO(weights_path)
+
+
+def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig) -> list[Candidate]:
+    """Runs the trained detector and returns candidate bboxes, each
+    carrying YOLO's own top-1 class/confidence for the fusion policy in
+    classify/match.py.
+
+    Falls back to an empty candidate list (not an exception) if the
+    weights file doesn't exist yet — keeps `edp run` usable while a
+    training run is still in progress, matching the same "stay runnable
+    with an incomplete model" principle as the empty-reference-library
+    case in classify/library.py.
+    """
+    weights_path = Path(cfg.yolo_weights)
+    if not weights_path.exists():
+        return []
+
+    model = _load_model(str(weights_path))
+    results = model.predict(img_rgb, conf=cfg.yolo_conf_threshold, iou=cfg.yolo_iou_threshold, verbose=False)
+    class_names = results[0].names
+
+    h, w = img_rgb.shape[:2]
+    candidates: list[Candidate] = []
+    for box in results[0].boxes:
+        x0, y0, x1, y1 = (int(v) for v in box.xyxy[0].tolist())
+        x0, y0 = max(0, x0), max(0, y0)
+        x1, y1 = min(w, x1), min(h, y1)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        bbox: BBox = (x0, y0, x1, y1)
+        yolo_class = class_names[int(box.cls[0])]
+        yolo_confidence = float(box.conf[0])
+        candidates.append(
+            Candidate(bbox=bbox, kind="symbol", yolo_class=yolo_class, yolo_confidence=yolo_confidence)
+        )
+
+    # YOLO's own NMS (iou=cfg.yolo_iou_threshold above) doesn't catch every
+    # near-duplicate: two boxes from different anchors/scales can each pass
+    # NMS independently while still being 1-2px apart on the same physical
+    # symbol. Observed concretely on D4: the same MOSFET, transistor, and
+    # battery each boxed twice under different ids, which cascaded into
+    # over-merged connectivity nets downstream (two near-identical boxes'
+    # terminals both snapping to the same wire). Reuses the same merge the
+    # density-based localizer needed for an analogous reason — see
+    # localize/merge.py. The merge keeps the higher-confidence duplicate's
+    # class rather than dropping class info: on D4, one duplicate pair
+    # scored BJT_PNP 0.27 and BJT_NPN 0.53 for the same transistor, and the
+    # confident one was correct.
+    return merge_overlapping(candidates, cfg.candidate_merge_overlap)

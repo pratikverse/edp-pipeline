@@ -16,8 +16,7 @@ from edp.config import Config
 
 
 def _cmd_run(args: argparse.Namespace) -> None:
-    from edp.emit.graph_out import export_all
-    from edp.emit.json_out import to_json_dict
+    from edp.emit import export_all, to_json_dict
     from edp.pipeline import run
 
     cfg = Config.load(args.config)

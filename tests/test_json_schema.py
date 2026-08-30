@@ -1,6 +1,6 @@
 """Contract tests: emitted JSON conforms to the problem statement's example
 schema and is internally consistent (docs/03, docs/07)."""
-from edp.emit.json_out import to_json_dict
+from edp.emit import to_json_dict
 from edp.types import DrawingResult, Net, Symbol, Terminal, ValidationResult
 
 REQUIRED_SYMBOL_FIELDS = {"id", "type", "coordinates", "connections"}

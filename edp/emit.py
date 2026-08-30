@@ -1,28 +1,49 @@
-"""Two graph views, built from two different sources on purpose:
-
-- The **rich** view (GraphML + node-link JSON) is bipartite (symbols and
-  nets as separate node types, edges = terminal attachments) and is built
-  from the pipeline's internal `DrawingResult` — it carries detail the
-  delivered JSON deliberately drops (which net joins two symbols, pin
-  index, junction count). See docs/06_data_model.md for why nets are the
-  primary connectivity object internally.
-- The **delivered** view (the PNG) is the plain component graph — nodes
-  are symbols, edges are `connections` pairs — and needs nothing beyond
-  what's already in the trimmed JSON (emit/json_out.py::to_json_dict).
-  `connections` is already a complete, symmetric adjacency list, so this
-  graph is built directly from that JSON rather than re-deriving it from
-  `DrawingResult`: the JSON and the picture are then visibly the same
-  data, not two independent projections of a shared source that happen
-  to agree.
-"""
+"""Stages 7-8 - JSON netlist and graph output."""
 from __future__ import annotations
+
+
+# ===========================================================================
+# json_out.py
+# ===========================================================================
+
+from edp.types import DrawingResult
+
+
+def _connections_for(symbol_id: str, nets) -> list[str]:
+    connections: list[str] = []
+    for net in nets:
+        member_ids = {sid for sid, _tidx in net.terminals}
+        if symbol_id not in member_ids:
+            continue
+        for other_id in sorted(member_ids - {symbol_id}):
+            if other_id not in connections:
+                connections.append(other_id)
+    return connections
+
+
+def to_json_dict(result: DrawingResult) -> dict:
+    return {
+        "symbols": [
+            {
+                "id": symbol.id,
+                "type": symbol.type,
+                "coordinates": list(symbol.bbox),
+                "connections": _connections_for(symbol.id, result.nets),
+            }
+            for symbol in result.symbols
+        ]
+    }
+
+# ===========================================================================
+# graph_out.py
+# ===========================================================================
 
 import math
 from pathlib import Path
 
 import networkx as nx
 
-from edp.emit.json_out import to_json_dict
+# to_json_dict: defined above
 from edp.types import DrawingResult
 
 

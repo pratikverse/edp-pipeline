@@ -1,6 +1,10 @@
-"""Self-consistency validation. No ground truth exists for these two
-drawings (docs/05), so these are structural checks, not an accuracy score."""
+"""Post-processing - ground-truth-free self-consistency checks."""
 from __future__ import annotations
+
+
+# ===========================================================================
+# checks.py
+# ===========================================================================
 
 from edp.config import ValidateConfig
 from edp.types import Net, Symbol, ValidationResult

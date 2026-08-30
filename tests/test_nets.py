@@ -4,7 +4,7 @@ it can be verified precisely, since we control the input (docs/04, docs/06).
 import numpy as np
 
 from edp.config import WiresConfig
-from edp.wires.nets import build_nets
+from edp.wires import build_nets
 
 
 def _cross_skeleton(size=21, dot=False):

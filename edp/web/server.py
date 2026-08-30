@@ -12,8 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from edp.config import Config
-from edp.emit.graph_out import export_all
-from edp.emit.json_out import to_json_dict
+from edp.emit import export_all, to_json_dict
 from edp.pipeline import run
 
 app = FastAPI(title="Electrical Drawing Interpretation Pipeline")
