@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.ipynb_checkpoints/
+
+# secrets
+.env
+
+# model weights and generated training data — large, regeneratable
+*.pt
+*.joblib
+*.onnx
+debug_*.png
+runs/
+outputs/
+
+# local data / problem-statement materials — kept on disk, not in the repo
+/data/
+/Problem Statement/
+/_baseline/

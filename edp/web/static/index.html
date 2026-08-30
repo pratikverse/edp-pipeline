@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Electrical Drawing Interpretation Pipeline</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161923;
+    --border: #2a2f3d;
+    --text: #e6e8ef;
+    --muted: #9aa1b2;
+    --accent: #5b9dff;
+    --json-key: #7ec1ff;
+    --json-string: #9fd88a;
+    --json-number: #f2b366;
+    --json-bool: #d78bf0;
+    --json-punct: #5c6376;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .controls { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+  input[type="file"] { color: var(--muted); }
+  button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    height: calc(100vh - 57px);
+  }
+  section {
+    background: var(--bg);
+    overflow: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  section h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin: 0 0 12px;
+    flex: none;
+  }
+  .panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  pre {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 12px;
+    line-height: 1.6;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    width: 100%;
+    margin: 0;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  .jk { color: var(--json-key); }
+  .js { color: var(--json-string); }
+  .jn { color: var(--json-number); }
+  .jb { color: var(--json-bool); }
+  .jp { color: var(--json-punct); }
+  img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; border: 1px solid var(--border); }
+  .status { color: var(--muted); font-size: 13px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 40px 0; text-align: center; margin: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Electrical Drawing Interpretation Pipeline</h1>
+  <div class="controls">
+    <input id="file" type="file" accept="image/*" />
+    <button id="run">Process</button>
+    <span id="status" class="status"></span>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>Original Drawing</h2>
+    <div class="panel-body" id="original-out"><div class="empty">Upload a drawing and click Process.</div></div>
+  </section>
+  <section>
+    <h2>Detected Symbols</h2>
+    <div class="panel-body" id="overlay-out"><div class="empty">&nbsp;</div></div>
+  </section>
+  <section>
+    <h2>JSON</h2>
+    <div class="panel-body" id="json-out"><div class="empty">&nbsp;</div></div>
+  </section>
+  <section>
+    <h2>Graph</h2>
+    <div class="panel-body" id="graph-out"><div class="empty">&nbsp;</div></div>
+  </section>
+</main>
+<script>
+const fileInput = document.getElementById('file');
+const runBtn = document.getElementById('run');
+const statusEl = document.getElementById('status');
+const originalOut = document.getElementById('original-out');
+const overlayOut = document.getElementById('overlay-out');
+const jsonOut = document.getElementById('json-out');
+const graphOut = document.getElementById('graph-out');
+
+function escapeHtml(s) {
+  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+}
+
+// Lightweight JSON syntax highlighter: stringify then tag tokens by regex.
+// Good enough for a demo pane; not meant to be a general-purpose highlighter.
+function highlightJson(value) {
+  const text = escapeHtml(JSON.stringify(value, null, 2));
+  return text.replace(
+    /(&quot;(?:\\.|[^&"\\])*&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+    (match, str, isKey, bool, num) => {
+      if (str) return isKey ? `<span class="jk">${str}</span><span class="jp">${isKey}</span>` : `<span class="js">${str}</span>`;
+      if (bool) return `<span class="jb">${bool}</span>`;
+      if (num) return `<span class="jn">${num}</span>`;
+      return match;
+    }
+  );
+}
+
+function showImage(container, src) {
+  container.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = src;
+  container.appendChild(img);
+}
+
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  showImage(originalOut, URL.createObjectURL(file));
+});
+
+runBtn.addEventListener('click', async () => {
+  const file = fileInput.files[0];
+  if (!file) { statusEl.textContent = 'choose a file first'; return; }
+
+  runBtn.disabled = true;
+  statusEl.textContent = 'processing...';
+  overlayOut.innerHTML = '<div class="empty">Running pipeline...</div>';
+  jsonOut.innerHTML = '<div class="empty">Running pipeline...</div>';
+  graphOut.innerHTML = '';
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const res = await fetch('/api/process', { method: 'POST', body: form });
+    if (!res.ok) throw new Error(`server returned ${res.status}`);
+    const data = await res.json();
+
+    showImage(originalOut, data.original_png);
+    showImage(overlayOut, data.overlay_png);
+    showImage(graphOut, data.graph_png);
+
+    jsonOut.innerHTML = '';
+    const pre = document.createElement('pre');
+    pre.innerHTML = highlightJson(data.json);
+    jsonOut.appendChild(pre);
+
+    const timingLine = Object.entries(data.timing || {})
+      .map(([k, v]) => `${k}: ${v}s`).join(' · ');
+    statusEl.textContent = timingLine || 'done';
+  } catch (err) {
+    statusEl.textContent = 'error: ' + err.message;
+    jsonOut.innerHTML = `<div class="empty">${err.message}</div>`;
+  } finally {
+    runBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

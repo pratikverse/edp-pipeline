@@ -1,0 +1,35 @@
+name: edp
+# torch/torchvision come from pip (official wheels), NOT the pytorch conda
+# channel — mixing them with conda-forge triggers an MKL/OpenMP DLL clash on
+# Windows (fbgemm.dll, WinError 182). For GPU, after `conda env create`:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - scipy
+  - opencv
+  - scikit-image
+  - scikit-learn
+  - networkx
+  - matplotlib
+  - lxml
+  - tesseract
+  - pillow
+  - pyyaml
+  - pytest
+  - python-dotenv
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cpu
+      - torch
+      - torchvision
+      - pydantic>=2
+      - pytesseract
+      - fastapi
+      - uvicorn[standard]
+      - python-multipart
+      - transformers
+      - ultralytics
+      - faiss-cpu
