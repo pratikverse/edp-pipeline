@@ -47,33 +47,33 @@ def test_normalize_applies_safe_dollar_to_s_substitution():
 
 
 def test_exact_part_number_is_level_a_and_overrides_designator_reading():
-    ev = evidence_from_text("T2BC547", cfg_path="config/reference_designators.yaml")
+    ev = evidence_from_text("T2BC547", cfg_path="edp/domains/electronic/designators.yaml")
     assert ev.class_scores == {"BJT_NPN": 1.0}
     assert ev.metadata["level"] == EvidenceLevel.EXACT_PART_NUMBER
     assert ev.confidence > 0.9
 
 
 def test_clean_designator_is_level_b_moderate_confidence():
-    ev = evidence_from_text("R6", cfg_path="config/reference_designators.yaml")
+    ev = evidence_from_text("R6", cfg_path="edp/domains/electronic/designators.yaml")
     assert ev.class_scores == {"Resistor": 1.0}
     assert ev.metadata["level"] == EvidenceLevel.DESIGNATOR
     assert 0.4 <= ev.confidence <= 0.7
 
 
 def test_ambiguous_ocr_abstains_rather_than_guessing():
-    ev = evidence_from_text("Ty eS 2202", cfg_path="config/reference_designators.yaml")
+    ev = evidence_from_text("Ty eS 2202", cfg_path="edp/domains/electronic/designators.yaml")
     assert not ev.has_evidence
 
 
 def test_unrecognised_designator_prefix_abstains():
     # "TP2" (a test point) has a designator shape but no entry in the table
     # -- must not be forced into some other class.
-    ev = evidence_from_text("TP2", cfg_path="config/reference_designators.yaml")
+    ev = evidence_from_text("TP2", cfg_path="edp/domains/electronic/designators.yaml")
     assert not ev.has_evidence
 
 
 def test_no_text_abstains():
-    ev = evidence_from_text(None, cfg_path="config/reference_designators.yaml")
+    ev = evidence_from_text(None, cfg_path="edp/domains/electronic/designators.yaml")
     assert not ev.has_evidence
-    ev2 = evidence_from_text("   ", cfg_path="config/reference_designators.yaml")
+    ev2 = evidence_from_text("   ", cfg_path="edp/domains/electronic/designators.yaml")
     assert not ev2.has_evidence

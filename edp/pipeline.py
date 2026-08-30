@@ -14,6 +14,7 @@ from edp.classify.embedder import Embedder
 from edp.classify.library import ReferenceLibrary
 from edp.classify.match import classify_candidates
 from edp.config import Config
+from edp.domains.base import DomainPack
 from edp.localize import detect_candidates, find_candidates
 
 from edp.preprocess import binarize, to_grayscale, deskew, blue_layer_mask
@@ -27,6 +28,7 @@ from edp.wires import detect_junction_dots, build_nets, skeletonize_wires, subtr
 def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResult, dict]:
     """Runs the full pipeline on one drawing. Returns (result, timing)."""
     cfg = cfg or Config.load()
+    pack = DomainPack.load(cfg.domain)
     image_path = Path(image_path)
     timing: dict[str, float] = {}
 
@@ -69,13 +71,13 @@ def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResul
         # in the classify stage below, unchanged (see detect/yolo_detect.py
         # for why). Falls back to the density-based proposer if no trained
         # weights exist yet, or if use_yolo is off.
-        if cfg.localize.use_yolo and Path(cfg.localize.yolo_weights).exists():
-            candidates = detect_candidates(img_rgb, cfg.localize)
+        if cfg.localize.use_yolo and pack.detector_weights.exists():
+            candidates = detect_candidates(img_rgb, cfg.localize, pack.detector_weights)
         else:
             candidates = find_candidates(binary, cfg.localize, text_tokens=tokens, dots=dots)
 
     with _stage("classify"):
-        library = ReferenceLibrary.build(cfg.classify.reference_dir, cfg.classify)
+        library = ReferenceLibrary.build(pack.reference_dir, cfg.classify)
         embedder = Embedder(cfg.classify.model)
         # Classification runs before the final text-association stage (see
         # above), but the OCR text-prior evidence source (classify/text_prior.py)
@@ -85,7 +87,9 @@ def run(image_path: str | Path, cfg: Config | None = None) -> tuple[DrawingResul
         # candidate boxes instead of classified symbols — see
         # text/associate.py's nearby_token_text docstring.
         ocr_hints = [nearby_token_text(c.bbox, tokens, cfg.text) for c in candidates]
-        symbols = classify_candidates(img_rgb, candidates, library, cfg.classify, embedder, ocr_hints=ocr_hints)
+        symbols = classify_candidates(
+            img_rgb, candidates, library, cfg.classify, pack, embedder, ocr_hints=ocr_hints
+        )
 
     with _stage("text_associate"):
         symbols = associate_tokens(symbols, tokens, cfg.text)

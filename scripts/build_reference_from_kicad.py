@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT))
 
 from edp.classify.kicad_import import render_kicad_file  # noqa: E402
 

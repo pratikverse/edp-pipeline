@@ -48,7 +48,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT))
 
 # Source class index (from the downloaded data.yaml's `names` list) -> our
 # class name. Anything not in this dict is dropped.

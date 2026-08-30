@@ -36,7 +36,7 @@ import cv2
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT))
 
 REFERENCE_DIR = REPO_ROOT / "data" / "reference"
 

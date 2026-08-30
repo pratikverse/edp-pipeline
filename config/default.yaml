@@ -1,4 +1,8 @@
-# All pipeline thresholds live here, never inline in code (docs/07_project_layout.md).
+# Pipeline thresholds. Domain-specific knowledge (symbol library, detector
+# weights, OCR designator table, fusion weights) is in edp/domains/<domain>/pack.yaml.
+
+domain: electronic
+
 
 preprocess:
   binarize_block_size: 31   # adaptive threshold neighbourhood, must be odd
@@ -18,16 +22,6 @@ localize:
   candidate_bbox_pad: 4       # px; padding added around each density-blob bbox
   candidate_merge_overlap: 0.5 # union candidates overlapping more than this (of the smaller box)
   use_yolo: true                # experimental branch: YOLO localizer instead of skeleton-density
-  yolo_weights: data/models/synthetic_yolo_17class.pt  # 17-class model, still the shipped default.
-  # A 21-class retrain exists (symbol_detector_mixed_v2, docs/08 Phase 1.2: adds Optocoupler/
-  # Potentiometer/Relay/Load + Battery/Transformer style variants) with strong synthetic-val
-  # mAP50 (>0.98 on every new class) but a MEASURED real-world regression on D4 via `edp eval`
-  # (detection F1 0.914->0.686: Switch/Capacitor_Polarized/Battery boxes that used to be found
-  # confidently now top out at conf 0.02-0.10 and are misclassified). Root cause is believed to
-  # be yolov8n's fixed 3M-param capacity being spread thinner across 21 classes rather than
-  # anything wrong with the new classes themselves — not swapped in as default until that's
-  # fixed (more epochs / more per-class data / a larger backbone) and re-verified against
-  # data/golden/. See docs/08_improvement_plan.md section 1.2.
   yolo_conf_threshold: 0.12  # lowered from 0.25 - was a recall bottleneck, verified on D5
   yolo_iou_threshold: 0.45
 
@@ -37,14 +31,7 @@ classify:
   rotations: [0, 90, 180, 270]
   mirror: true
   unknown_similarity_threshold: 0.62
-  reference_dir: data/reference
-  # Evidence-fusion weights (classify/evidence.py, classify/match.py). Empty ->
-  # code defaults (yolo 1.2, dinov2 1.0, text_prior 1.0). Override individual
-  # sources here, e.g. `evidence_weights: {text_prior: 1.5}`.
-  evidence_weights: {}
-  reference_designators_path: config/reference_designators.yaml
-  ambiguity_margin_threshold: 0.15  # reserved for confusion-pair specialist routing (unused until one exists)
-  probe_model_path: data/models/linear_probe.joblib  # docs/08 Phase 7; abstains if this file doesn't exist
+  ambiguity_margin_threshold: 0.15  # reserved for confusion-pair specialist routing
 
 text:
   upscale_factor: 3

@@ -1,0 +1,20 @@
+# Electronic circuit schematics (D4, D5). Symbols and pin geometry sourced
+# from KiCad's open libraries; detector trained on synthetic composites of
+# those symbols (scripts/generate_synthetic_dataset.py + train_yolo.py).
+detector_weights: data/models/synthetic_yolo_17class.pt
+reference_dir: data/reference
+designators_path: edp/domains/electronic/designators.yaml
+probe_model_path: data/models/linear_probe.joblib
+specialists_module: edp.domains.electronic.specialists
+
+# Evidence-fusion base weights (edp/classify/evidence.py). YOLO gets a
+# modest edge as the supervised, in-domain signal; nothing is a hard
+# override. Empty entries fall back to 1.0.
+evidence_weights:
+  yolo: 1.2
+  dinov2: 1.0
+  dinov2_probe: 1.0
+  text_prior: 1.0
+  "geometry:battery_capacitor": 1.0
+  "geometry:bjt_potentiometer": 1.0
+  "geometry:npn_pnp": 1.0

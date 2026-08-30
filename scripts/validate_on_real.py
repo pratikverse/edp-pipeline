@@ -21,9 +21,10 @@ from pathlib import Path
 import cv2
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "src"))
+sys.path.insert(0, str(REPO_ROOT))
 
 from edp.config import Config  # noqa: E402
+from edp.domains.base import DomainPack
 from edp.pipeline import run  # noqa: E402
 
 
@@ -53,7 +54,7 @@ def main() -> None:
         images = images[: args.limit]
 
     cfg = Config.load()
-    print(f"[validate] {len(images)} real circuit images, using YOLO weights: {cfg.localize.yolo_weights}")
+    print(f"[validate] {len(images)} real circuit images, using YOLO weights: {DomainPack.load(cfg.domain).detector_weights}")
 
     summary = []
     for image_path in images:

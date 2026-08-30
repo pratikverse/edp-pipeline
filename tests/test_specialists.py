@@ -1,4 +1,4 @@
-"""Geometric confusion-pair specialists (classify/specialists.py), tested
+"""Geometric confusion-pair specialists (edp/domains/electronic/specialists.py), tested
 against this project's own KiCad reference renders — the same crops used
 to hand-validate the rules during development (see docs/08_improvement_plan.md
 and the conversation record for the fuller empirical validation against
@@ -9,7 +9,7 @@ from pathlib import Path
 import cv2
 import pytest
 
-from edp.classify.specialists import (
+from edp.domains.electronic.specialists import (
     battery_capacitor_specialist,
     bjt_potentiometer_specialist,
     select_specialist,
@@ -79,6 +79,6 @@ def test_select_specialist_npn_pnp_not_routed_in_production():
     # real-world reliability finding that justifies this.
     fn = select_specialist(frozenset({"BJT_NPN", "BJT_PNP"}))
     assert fn is not None  # falls back to the broader BJT/Potentiometer group
-    from edp.classify.specialists import npn_pnp_specialist
+    from edp.domains.electronic.specialists import npn_pnp_specialist
 
     assert fn is not npn_pnp_specialist

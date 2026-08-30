@@ -18,7 +18,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from .evidence import ClassificationEvidence, no_evidence
+from edp.classify.evidence import ClassificationEvidence, no_evidence
 
 CONFUSION_GROUPS: list[frozenset[str]] = [
     frozenset({"Battery", "Capacitor", "Capacitor_Polarized"}),

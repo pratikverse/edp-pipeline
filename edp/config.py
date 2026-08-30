@@ -25,11 +25,9 @@ class LocalizeConfig(BaseModel):
     density_merge_kernel: int = 9
     candidate_bbox_pad: int = 4
     candidate_merge_overlap: float = 0.5  # union candidates overlapping more than this (relative to the smaller box)
-    use_yolo: bool = True  # experimental branch: YOLO localizer instead of skeleton-density
-    yolo_weights: str = "outputs/yolo_runs/symbol_detector_mixed/weights/best.pt"  # 17-class
-    # model, still the shipped default — see config/default.yaml for why the 21-class
-    # symbol_detector_mixed_v2 retrain (docs/08 Phase 1.2) isn't swapped in yet despite strong
-    # synthetic-val numbers: it measurably regresses real-world (D4) detection via `edp eval`.
+    use_yolo: bool = True  # YOLO localizer vs. the classical skeleton-density fallback
+    # NOTE: the trained weights path is domain-specific and lives in the
+    # domain pack (edp/domains/<domain>/pack.yaml), not here.
     yolo_conf_threshold: float = 0.12  # lowered from 0.25: verified on D5 that most of the
     # detections between 0.1-0.25 confidence land on real components, not noise — the
     # higher threshold was a recall bottleneck, not a precision safeguard (see docs/02)
@@ -42,26 +40,12 @@ class ClassifyConfig(BaseModel):
     rotations: list[int] = [0, 90, 180, 270]
     mirror: bool = True
     unknown_similarity_threshold: float = 0.62
-    reference_dir: str = "data/reference"
-    # Evidence-fusion architecture (docs/08_improvement_plan.md, classify/evidence.py):
-    # each source (yolo, dinov2, text_prior) contributes weight * confidence * score
-    # per class; these are the per-source base weights. See classify/match.py's
-    # DEFAULT_EVIDENCE_WEIGHTS for the rationale behind the yolo/dinov2 split.
-    # Empty here means "use the code defaults" — set entries to override individually.
-    evidence_weights: dict[str, float] = {}
-    # OCR reference-designator / part-number prior table (classify/text_prior.py).
-    reference_designators_path: str = "config/reference_designators.yaml"
-    # Below this top-1/top-2 fusion margin, a candidate is "ambiguous" — reserved
-    # for confusion-pair geometry specialist routing (docs/08), unused until one
-    # exists; kept here now so the threshold is configurable from day one rather
-    # than added later as a breaking config change.
     ambiguity_margin_threshold: float = 0.15
-    # Linear-probe evidence source (docs/08 Phase 7, classify/probe.py). Points
-    # at the artifact scripts/train_linear_probe.py writes; if the file doesn't
-    # exist yet, the source just abstains (no_evidence) rather than the
-    # pipeline failing -- same graceful-degradation pattern as an empty
-    # reference library.
-    probe_model_path: str = "outputs/probe/linear_probe.joblib"
+    # NOTE: domain-specific knowledge — the reference-image library, the OCR
+    # designator table, the linear-probe artifact, and the evidence-fusion
+    # weights — lives in the domain pack (edp/domains/<domain>/pack.yaml),
+    # not here. This block is only the model + augmentation params that are
+    # the same regardless of drawing type.
 
 
 class TextConfig(BaseModel):
@@ -103,6 +87,7 @@ class OutputConfig(BaseModel):
 
 
 class Config(BaseModel):
+    domain: str = "electronic"  # which edp/domains/<name>/ pack to load
     preprocess: PreprocessConfig = PreprocessConfig()
     localize: LocalizeConfig = LocalizeConfig()
     classify: ClassifyConfig = ClassifyConfig()

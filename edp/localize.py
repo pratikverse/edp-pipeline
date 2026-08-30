@@ -269,7 +269,7 @@ def _load_model(weights_path: str):
     return YOLO(weights_path)
 
 
-def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig) -> list[Candidate]:
+def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig, weights: str | Path) -> list[Candidate]:
     """Runs the trained detector and returns candidate bboxes, each
     carrying YOLO's own top-1 class/confidence for the fusion policy in
     classify/match.py.
@@ -280,7 +280,7 @@ def detect_candidates(img_rgb: np.ndarray, cfg: LocalizeConfig) -> list[Candidat
     with an incomplete model" principle as the empty-reference-library
     case in classify/library.py.
     """
-    weights_path = Path(cfg.yolo_weights)
+    weights_path = Path(weights)
     if not weights_path.exists():
         return []
 

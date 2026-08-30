@@ -52,15 +52,18 @@ import numpy as np
 from edp.config import ClassifyConfig
 from edp.types import Candidate, Symbol, Terminal
 
+from edp.domains.base import DomainPack
+
 from .embedder import Embedder
 from .evidence import ClassificationEvidence, fuse_evidence, no_evidence
 from .library import LibraryEntry, ReferenceLibrary
 from .probe import probe_evidence
-from .specialists import CONFUSION_GROUPS, select_specialist
 from .text_prior import evidence_from_text
 
 UNKNOWN_TYPE = "Unknown"
 
+# Fallback weights, merged under a domain pack's own `evidence_weights`
+# (edp/domains/<name>/pack.yaml) so a pack need only override what differs.
 DEFAULT_EVIDENCE_WEIGHTS = {
     # YOLO gets a modest edge over DINOv2 at equal confidence -- it's the
     # supervised, in-domain signal (trained on our own schematic symbols),
@@ -132,7 +135,7 @@ def _find_entry_for_class(library: ReferenceLibrary, class_name: str) -> Library
     return fallback
 
 
-def _select_ambiguous_specialist(fusion_candidates: list[tuple[str, float]]):
+def _select_ambiguous_specialist(fusion_candidates: list[tuple[str, float]], pack: DomainPack):
     """Whether fusion's own result is "ambiguous" for specialist-routing
     purposes, and if so, which specialist to call.
 
@@ -172,11 +175,11 @@ def _select_ambiguous_specialist(fusion_candidates: list[tuple[str, float]]):
         return None
     top1_class = fusion_candidates[0][0]
     top3_classes = [cn for cn, _score in fusion_candidates[:3]]
-    for group in CONFUSION_GROUPS:
+    for group in pack.confusion_groups:
         if top1_class in group:
-            return select_specialist(group)
+            return pack.select_specialist(group)
         if sum(1 for cn in top3_classes if cn in group) >= 2:
-            return select_specialist(group)
+            return pack.select_specialist(group)
     return None
 
 
@@ -213,6 +216,7 @@ def classify_candidates(
     candidates: list[Candidate],
     library: ReferenceLibrary,
     cfg: ClassifyConfig,
+    pack: DomainPack,
     embedder: Embedder | None = None,
     ocr_hints: list[str] | None = None,
 ) -> list[Symbol]:
@@ -228,7 +232,9 @@ def classify_candidates(
     embeddings = embedder.embed(crops) if crops else np.zeros((0, cfg.embedding_dim))
     hints = ocr_hints or [None] * len(candidates)
 
-    weights = {**DEFAULT_EVIDENCE_WEIGHTS, **(cfg.evidence_weights or {})}
+    weights = {**DEFAULT_EVIDENCE_WEIGHTS, **(pack.evidence_weights or {})}
+    designators_path = str(pack.designators_path)
+    probe_path = str(pack.probe_model_path) if pack.probe_model_path else ""
 
     symbols: list[Symbol] = []
     for i, candidate in enumerate(candidates):
@@ -237,8 +243,8 @@ def classify_candidates(
             [],
         )
         yolo_ev = _yolo_evidence(candidate)
-        text_ev = evidence_from_text(hints[i], cfg.reference_designators_path)
-        probe_ev = probe_evidence(embeddings[i], cfg.probe_model_path) if len(embeddings) else no_evidence(
+        text_ev = evidence_from_text(hints[i], designators_path)
+        probe_ev = probe_evidence(embeddings[i], probe_path) if len(embeddings) else no_evidence(
             "dinov2_probe", reason="empty_embeddings"
         )
 
@@ -251,7 +257,7 @@ def classify_candidates(
         # most uncertain results aren't a *known* confusion pair at all).
         # See _select_ambiguous_specialist for why this isn't a literal
         # top-1-vs-top-2 margin check.
-        specialist = _select_ambiguous_specialist(fusion.candidates)
+        specialist = _select_ambiguous_specialist(fusion.candidates, pack)
         if specialist is not None:
             geometry_ev = specialist(crops[i])
             fusion = fuse_evidence(
