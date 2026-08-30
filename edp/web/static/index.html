@@ -5,104 +5,51 @@
 <title>Electrical Drawing Interpretation Pipeline</title>
 <style>
   :root {
-    --bg: #0f1115;
-    --panel: #161923;
-    --border: #2a2f3d;
-    --text: #e6e8ef;
-    --muted: #9aa1b2;
-    --accent: #5b9dff;
-    --json-key: #7ec1ff;
-    --json-string: #9fd88a;
-    --json-number: #f2b366;
-    --json-bool: #d78bf0;
-    --json-punct: #5c6376;
+    --bg: #0f1115; --panel: #161923; --border: #2a2f3d;
+    --text: #e6e8ef; --muted: #9aa1b2; --accent: #5b9dff;
+    --jk: #7ec1ff; --js: #9fd88a; --jn: #f2b366; --jb: #d78bf0; --jp: #5c6376;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-  }
-  header {
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
-  header .controls { display: flex; gap: 8px; align-items: center; margin-left: auto; }
-  input[type="file"] { color: var(--muted); }
-  button {
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-  }
+  body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .controls { display: flex; gap: 8px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+  input[type="file"] { color: var(--muted); font-size: 13px; }
+  button { background: var(--accent); color: #fff; border: none; padding: 7px 15px; border-radius: 6px; cursor: pointer; font-size: 14px; }
   button:disabled { opacity: 0.5; cursor: default; }
-  main {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
-    gap: 1px;
-    background: var(--border);
-    height: calc(100vh - 57px);
-  }
-  section {
-    background: var(--bg);
-    overflow: auto;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  section h2 {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-    margin: 0 0 12px;
-    flex: none;
-  }
-  .panel-body {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-  }
-  pre {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    font-size: 12px;
-    line-height: 1.6;
-    overflow: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-    width: 100%;
-    margin: 0;
-    font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  }
-  .jk { color: var(--json-key); }
-  .js { color: var(--json-string); }
-  .jn { color: var(--json-number); }
-  .jb { color: var(--json-bool); }
-  .jp { color: var(--json-punct); }
-  img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; border: 1px solid var(--border); }
-  .status { color: var(--muted); font-size: 13px; }
-  .empty { color: var(--muted); font-size: 13px; padding: 40px 0; text-align: center; margin: auto; }
+  .badge { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .badge.on { color: var(--accent); border-color: var(--accent); }
+  .status { color: var(--muted); font-size: 12px; max-width: 40ch; }
+  main { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1px; background: var(--border); height: calc(100vh - 52px); }
+  section { background: var(--bg); overflow: hidden; padding: 14px; display: flex; flex-direction: column; min-height: 0; }
+  section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; flex: none; display: flex; justify-content: space-between; }
+  section h2 .count { color: var(--accent); }
+  .body { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start; justify-content: center; }
+  img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; border: 1px solid var(--border); }
+  pre { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-size: 12px; line-height: 1.55; overflow: auto; white-space: pre; width: 100%; margin: 0; font-family: ui-monospace, "SF Mono", Consolas, monospace; }
+  .jk{color:var(--jk)} .js{color:var(--js)} .jn{color:var(--jn)} .jb{color:var(--jb)} .jp{color:var(--jp)}
+  .empty { color: var(--muted); font-size: 13px; padding: 30px 0; text-align: center; margin: auto; }
+
+  /* detected-components panel: overlay on top, list below */
+  .detected { flex-direction: column; align-items: stretch; gap: 10px; }
+  .detected .overlay-wrap { flex: 1 1 55%; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  .detected table { flex: 1 1 45%; overflow: auto; display: block; border-collapse: collapse; font-size: 12px; width: 100%; }
+  .detected th { position: sticky; top: 0; background: var(--bg); text-align: left; color: var(--muted); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .detected td { padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .detected tr:hover td { background: var(--panel); }
+  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+  /* graph */
+  #graph-svg { width: 100%; height: 100%; }
+  #graph-svg line { stroke: #3a4152; stroke-width: 1.4; }
+  #graph-svg circle { stroke: #0f1115; stroke-width: 1.5; cursor: grab; }
+  #graph-svg text { fill: var(--text); font-family: ui-monospace, Consolas, monospace; pointer-events: none; }
 </style>
 </head>
 <body>
 <header>
   <h1>Electrical Drawing Interpretation Pipeline</h1>
+  <span id="domain" class="badge">domain: —</span>
   <div class="controls">
     <input id="file" type="file" accept="image/*" />
     <button id="run">Process</button>
@@ -111,96 +58,251 @@
 </header>
 <main>
   <section>
-    <h2>Original Drawing</h2>
-    <div class="panel-body" id="original-out"><div class="empty">Upload a drawing and click Process.</div></div>
+    <h2>Input Diagram</h2>
+    <div class="body" id="input-out"><div class="empty">Choose a drawing and click Process.</div></div>
   </section>
+
   <section>
-    <h2>Detected Symbols</h2>
-    <div class="panel-body" id="overlay-out"><div class="empty">&nbsp;</div></div>
+    <h2><span>Detected Components</span><span class="count" id="sym-count"></span></h2>
+    <div class="body detected" id="detected-out"><div class="empty">&nbsp;</div></div>
   </section>
+
   <section>
-    <h2>JSON</h2>
-    <div class="panel-body" id="json-out"><div class="empty">&nbsp;</div></div>
+    <h2><span>JSON (id · type · coordinates · connections)</span></h2>
+    <div class="body" id="json-out"><div class="empty">&nbsp;</div></div>
   </section>
+
   <section>
-    <h2>Graph</h2>
-    <div class="panel-body" id="graph-out"><div class="empty">&nbsp;</div></div>
+    <h2><span>Connectivity Graph</span><span class="count" id="edge-count"></span></h2>
+    <div class="body" id="graph-out"><div class="empty">&nbsp;</div></div>
   </section>
 </main>
+
 <script>
-const fileInput = document.getElementById('file');
-const runBtn = document.getElementById('run');
-const statusEl = document.getElementById('status');
-const originalOut = document.getElementById('original-out');
-const overlayOut = document.getElementById('overlay-out');
-const jsonOut = document.getElementById('json-out');
-const graphOut = document.getElementById('graph-out');
+const $ = id => document.getElementById(id);
+const fileInput = $('file'), runBtn = $('run'), statusEl = $('status'), domainEl = $('domain');
 
-function escapeHtml(s) {
-  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-}
+// brgb palette matching the server overlay (server uses BGR; here RGB)
+const PALETTE = ['#5b9dff','#9fd88a','#f2b366','#d78bf0','#7ec1ff','#ff8c5a','#78c8a0','#f08282'];
+const colorForType = (type, types) =>
+  type === 'Unknown' ? '#ff5555' : PALETTE[types.indexOf(type) % PALETTE.length];
 
-// Lightweight JSON syntax highlighter: stringify then tag tokens by regex.
-// Good enough for a demo pane; not meant to be a general-purpose highlighter.
-function highlightJson(value) {
+function escapeHtml(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function highlightJson(value){
   const text = escapeHtml(JSON.stringify(value, null, 2));
   return text.replace(
-    /(&quot;(?:\\.|[^&"\\])*&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
-    (match, str, isKey, bool, num) => {
+    /(&quot;(?:\\.|[^&"\\])*&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?)/g,
+    (m, str, isKey, bool, num) => {
       if (str) return isKey ? `<span class="jk">${str}</span><span class="jp">${isKey}</span>` : `<span class="js">${str}</span>`;
       if (bool) return `<span class="jb">${bool}</span>`;
-      if (num) return `<span class="jn">${num}</span>`;
-      return match;
-    }
-  );
+      if (num)  return `<span class="jn">${num}</span>`;
+      return m;
+    });
 }
 
-function showImage(container, src) {
+function showImage(container, src){
   container.innerHTML = '';
   const img = document.createElement('img');
   img.src = src;
   container.appendChild(img);
 }
 
+function renderDetected(container, symbols, types){
+  container.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'overlay-wrap';
+  const img = document.createElement('img');
+  img.id = 'overlay-img';
+  wrap.appendChild(img);
+  container.appendChild(wrap);
+
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>id</th><th>type</th><th>connections</th></tr></thead>';
+  const tb = document.createElement('tbody');
+  for (const s of symbols){
+    const tr = document.createElement('tr');
+    const c = colorForType(s.type, types);
+    tr.innerHTML =
+      `<td>${s.id}</td>` +
+      `<td><span class="swatch" style="background:${c}"></span>${s.type}</td>` +
+      `<td>${s.connections.length ? s.connections.join(', ') : '<span style="color:var(--muted)">—</span>'}</td>`;
+    tb.appendChild(tr);
+  }
+  table.appendChild(tb);
+  container.appendChild(table);
+  return img; // caller sets .src once the overlay data-url is known
+}
+
+// --- tiny dependency-free force-directed layout, drawn as SVG ---
+function renderGraph(container, symbols){
+  container.innerHTML = '';
+  if (!symbols.length){ container.innerHTML = '<div class="empty">no components</div>'; return; }
+
+  const types = [...new Set(symbols.map(s => s.type))].sort();
+  const idIndex = new Map(symbols.map((s, i) => [s.id, i]));
+  const nodes = symbols.map((s, i) => ({
+    id: s.id, type: s.type,
+    x: Math.cos(i / symbols.length * 2 * Math.PI) * 120 + (Math.random() - 0.5) * 20,
+    y: Math.sin(i / symbols.length * 2 * Math.PI) * 120 + (Math.random() - 0.5) * 20,
+    vx: 0, vy: 0,
+  }));
+  const edgeSet = new Set();
+  const edges = [];
+  for (const s of symbols){
+    for (const other of s.connections){
+      if (!idIndex.has(other)) continue;
+      const a = idIndex.get(s.id), b = idIndex.get(other);
+      const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+      if (edgeSet.has(key)) continue;
+      edgeSet.add(key);
+      edges.push([Math.min(a, b), Math.max(a, b)]);
+    }
+  }
+  $('edge-count').textContent = `${edges.length} edges`;
+
+  // simulate (Fruchterman-Reingold-ish + weak gravity so isolated nodes
+  // don't drift off)
+  const K = 55;                       // ideal edge length
+  const ITER = 500;
+  for (let iter = 0; iter < ITER; iter++){
+    const t = (1 - iter / ITER);
+    for (const n of nodes){ n.fx = 0; n.fy = 0; }
+    for (let i = 0; i < nodes.length; i++){
+      for (let j = i + 1; j < nodes.length; j++){
+        let dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+        let d = Math.hypot(dx, dy) || 0.01;
+        const rep = (K*K) / d;
+        nodes[i].fx += dx/d * rep; nodes[i].fy += dy/d * rep;
+        nodes[j].fx -= dx/d * rep; nodes[j].fy -= dy/d * rep;
+      }
+    }
+    for (const [a, b] of edges){
+      let dx = nodes[b].x - nodes[a].x, dy = nodes[b].y - nodes[a].y;
+      const d = Math.hypot(dx, dy) || 0.01;
+      const attr = (d*d) / K;
+      nodes[a].fx += dx/d * attr; nodes[a].fy += dy/d * attr;
+      nodes[b].fx -= dx/d * attr; nodes[b].fy -= dy/d * attr;
+    }
+    for (const n of nodes){
+      n.fx += -n.x * 0.04; n.fy += -n.y * 0.04;   // gravity to centre
+      const step = Math.min(Math.hypot(n.fx, n.fy), 6 * t + 0.5);
+      const d = Math.hypot(n.fx, n.fy) || 1;
+      n.x += n.fx/d * step; n.y += n.fy/d * step;
+    }
+  }
+
+  // normalize the settled layout into a fixed W×H box so node/edge sizes
+  // stay sensible whether the graph is dense or a sparse scatter
+  const W = 800, H = 560, pad = 40;
+  let xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+  let minX = Math.min(...xs), maxX = Math.max(...xs);
+  let minY = Math.min(...ys), maxY = Math.max(...ys);
+  const sx = (maxX - minX) < 1 ? 1 : (W - 2*pad) / (maxX - minX);
+  const sy = (maxY - minY) < 1 ? 1 : (H - 2*pad) / (maxY - minY);
+  const s = Math.min(sx, sy);
+  for (const n of nodes){
+    n.x = pad + (n.x - minX) * s;
+    n.y = pad + (n.y - minY) * s;
+  }
+  const R = 8, FS = 11;
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.id = 'graph-svg';
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  for (const [a, b] of edges){
+    const l = document.createElementNS(svgNS, 'line');
+    l.setAttribute('x1', nodes[a].x); l.setAttribute('y1', nodes[a].y);
+    l.setAttribute('x2', nodes[b].x); l.setAttribute('y2', nodes[b].y);
+    l.dataset.a = a; l.dataset.b = b;
+    svg.appendChild(l);
+  }
+  const nodeEls = [];
+  nodes.forEach((n, i) => {
+    const g = document.createElementNS(svgNS, 'g');
+    const c = document.createElementNS(svgNS, 'circle');
+    c.setAttribute('cx', n.x); c.setAttribute('cy', n.y);
+    c.setAttribute('r', R);
+    c.setAttribute('fill', colorForType(n.type, types));
+    const label = document.createElementNS(svgNS, 'text');
+    label.setAttribute('x', n.x + R + 2); label.setAttribute('y', n.y + 4);
+    label.setAttribute('font-size', FS);
+    label.textContent = n.id.replace(/^SYM_/, '');
+    g.appendChild(c); g.appendChild(label);
+    svg.appendChild(g);
+    nodeEls.push({ c, label });
+
+    // drag
+    let dragging = false;
+    c.addEventListener('pointerdown', e => { dragging = true; c.setPointerCapture(e.pointerId); c.style.cursor = 'grabbing'; });
+    c.addEventListener('pointerup',   e => { dragging = false; c.style.cursor = 'grab'; });
+    c.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+      n.x = p.x; n.y = p.y;
+      c.setAttribute('cx', n.x); c.setAttribute('cy', n.y);
+      label.setAttribute('x', n.x + R + 2); label.setAttribute('y', n.y + 4);
+      svg.querySelectorAll('line').forEach(l => {
+        if (+l.dataset.a === i){ l.setAttribute('x1', n.x); l.setAttribute('y1', n.y); }
+        if (+l.dataset.b === i){ l.setAttribute('x2', n.x); l.setAttribute('y2', n.y); }
+      });
+    });
+  });
+
+  container.appendChild(svg);
+}
+
 fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
-  if (!file) return;
-  showImage(originalOut, URL.createObjectURL(file));
+  const f = fileInput.files[0];
+  if (f) showImage($('input-out'), URL.createObjectURL(f));
 });
 
 runBtn.addEventListener('click', async () => {
   const file = fileInput.files[0];
-  if (!file) { statusEl.textContent = 'choose a file first'; return; }
+  if (!file){ statusEl.textContent = 'choose a file first'; return; }
 
   runBtn.disabled = true;
-  statusEl.textContent = 'processing...';
-  overlayOut.innerHTML = '<div class="empty">Running pipeline...</div>';
-  jsonOut.innerHTML = '<div class="empty">Running pipeline...</div>';
-  graphOut.innerHTML = '';
+  statusEl.textContent = 'processing…';
+  domainEl.textContent = 'domain: …'; domainEl.classList.remove('on');
+  for (const id of ['detected-out','json-out','graph-out'])
+    $(id).innerHTML = '<div class="empty">running pipeline…</div>';
+  $('sym-count').textContent = ''; $('edge-count').textContent = '';
 
   const form = new FormData();
   form.append('file', file);
 
   try {
     const res = await fetch('/api/process', { method: 'POST', body: form });
-    if (!res.ok) throw new Error(`server returned ${res.status}`);
     const data = await res.json();
+    if (data.error) throw new Error(data.error);
 
-    showImage(originalOut, data.original_png);
-    showImage(overlayOut, data.overlay_png);
-    showImage(graphOut, data.graph_png);
+    showImage($('input-out'), data.original_png);
 
-    jsonOut.innerHTML = '';
+    const symbols = data.json.symbols;
+    const types = [...new Set(symbols.map(s => s.type))].sort();
+    $('sym-count').textContent = `${symbols.length} symbols`;
+    domainEl.textContent = `domain: ${data.domain || '?'}`;
+    domainEl.classList.add('on');
+
+    const overlayImg = renderDetected($('detected-out'), symbols, types);
+    overlayImg.src = data.overlay_png;
+
+    $('json-out').innerHTML = '';
     const pre = document.createElement('pre');
     pre.innerHTML = highlightJson(data.json);
-    jsonOut.appendChild(pre);
+    $('json-out').appendChild(pre);
 
-    const timingLine = Object.entries(data.timing || {})
-      .map(([k, v]) => `${k}: ${v}s`).join(' · ');
-    statusEl.textContent = timingLine || 'done';
+    renderGraph($('graph-out'), symbols);
+
+    const t = Object.entries(data.timing || {}).map(([k, v]) => `${k} ${v}s`).join(' · ');
+    statusEl.textContent = t || 'done';
   } catch (err) {
     statusEl.textContent = 'error: ' + err.message;
-    jsonOut.innerHTML = `<div class="empty">${err.message}</div>`;
+    $('json-out').innerHTML = `<div class="empty">${escapeHtml(err.message)}</div>`;
   } finally {
     runBtn.disabled = false;
   }
