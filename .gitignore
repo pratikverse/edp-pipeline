@@ -17,6 +17,8 @@ outputs/
 
 # local data / problem-statement materials — kept on disk, not in the repo
 /data/
+!/data/golden/
+!/data/golden/**
 /Problem Statement/
 /_baseline/
 /outputs/

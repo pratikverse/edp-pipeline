@@ -1,0 +1,26 @@
+{
+  "_notes": "Hand-verified ground truth for D3 (toluene tray-column process, a P&ID). Built the same way as D4/D5 (docs/09 section 8): ran the pipeline with the v2 P&ID detector, rendered an id-only overlay, cross-referenced every box against the drawing. Coordinates come from the pipeline's own boxes where the box was on a real component; a few (Tray Column, Accumulator) were widened by hand to the true extent. Type is the true ISA class. 21 real components. The 'Air Cooled Exchanger' has no exact class in the 10-class P&ID library and is labelled Heat_Exchanger as the nearest. Instrument bubbles that sit next to circular equipment (FCV/LCV/HCV) are the dominant confusion, as expected. False positives seen in the run and excluded here: boxes on the Feed/Toluene/Gas-to-flare arrows and on 'El. 103'' text; duplicate boxes on H103 and the centre pump.",
+  "symbols": [
+    { "id": "G01", "type": "Heat_Exchanger", "coordinates": [130, 161, 205, 236], "note": "Shell and Tube Heat (Steam)" },
+    { "id": "G02", "type": "Vessel", "coordinates": [226, 78, 292, 192], "note": "Tray Column" },
+    { "id": "G03", "type": "Heat_Exchanger", "coordinates": [390, 3, 538, 124], "note": "Air Cooled Exchanger (no exact class; nearest)" },
+    { "id": "G04", "type": "Vessel", "coordinates": [452, 110, 497, 155], "note": "knockout drum below air cooler" },
+    { "id": "G05", "type": "Instrument", "coordinates": [309, 189, 364, 245], "note": "FCV-1 bubble" },
+    { "id": "G06", "type": "Valve_Control", "coordinates": [384, 202, 412, 231], "note": "control valve at FCV-1" },
+    { "id": "G07", "type": "Instrument", "coordinates": [597, 0, 691, 90], "note": "PC-1 bubble" },
+    { "id": "G08", "type": "Vessel", "coordinates": [572, 73, 690, 186], "note": "Accumulator (El. 43)" },
+    { "id": "G09", "type": "Valve_Control", "coordinates": [820, 102, 857, 141], "note": "gas-to-flare control valve" },
+    { "id": "G10", "type": "Heat_Exchanger", "coordinates": [361, 263, 433, 337], "note": "CWS heat exchanger" },
+    { "id": "G11", "type": "Pump_Centrifugal", "coordinates": [352, 349, 436, 437], "note": "centre centrifugal pump" },
+    { "id": "G12", "type": "Motor", "coordinates": [431, 360, 482, 415], "note": "motor on centre pump" },
+    { "id": "G13", "type": "Pump_Centrifugal", "coordinates": [182, 301, 269, 386], "note": "toluene centrifugal pump" },
+    { "id": "G14", "type": "Pump_Centrifugal", "coordinates": [357, 538, 450, 630], "note": "bottom centrifugal pump" },
+    { "id": "G15", "type": "Motor", "coordinates": [444, 549, 492, 604], "note": "motor on bottom pump" },
+    { "id": "G16", "type": "Instrument", "coordinates": [707, 371, 760, 425], "note": "LCV-1 bubble" },
+    { "id": "G17", "type": "Valve_Control", "coordinates": [718, 429, 750, 462], "note": "control valve at LCV-1 (Cooler H 104)" },
+    { "id": "G18", "type": "Heat_Exchanger", "coordinates": [770, 344, 842, 415], "note": "H 103" },
+    { "id": "G19", "type": "Heat_Exchanger", "coordinates": [771, 410, 841, 479], "note": "Cooler H 104" },
+    { "id": "G20", "type": "Instrument", "coordinates": [638, 532, 692, 587], "note": "HCV-1 bubble" },
+    { "id": "G21", "type": "Valve_Control", "coordinates": [648, 590, 682, 625], "note": "control valve at HCV-1 (38 gpm to Process)" }
+  ]
+}

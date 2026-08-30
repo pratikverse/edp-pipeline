@@ -1,0 +1,25 @@
+{
+  "_notes": "Hand-verified golden set for D5.png. Ids/coordinates come from the current pipeline's own detections (outputs/golden_prep/D5.json) with TYPE corrected against direct zoomed-crop inspection of the schematic (see the conversation record for the individual crops examined). D5 is a dense RF circuit (110 nets on 17 detections) -- this golden set covers the 17 detected boxes plus ONE clearly-identifiable missed component (Q1/MPSH11, a transistor drawn without the usual circle outline, unlike D4's transistors) with an estimated bbox; several other real components visible in the drawing (C1-C4, L2, L3, the antenna glyph, XTAL crystal) were NOT individually catalogued here given time constraints -- recall numbers computed against this file are therefore a conservative floor, not exhaustive ground truth, and that gap is disclosed rather than hidden. Connections are inherited from the pipeline output unchanged (not independently traced), same scope decision as D4's golden set.",
+  "symbols": [
+    {"id": "B9",      "type": "Resistor",    "coordinates": [453,269,488,290], "connections": ["L4","MPSH11","R4","SYM_005","SYM_009","SYM_015"], "note": "actually R8 220R -- id mislabeled (OCR/association picked up a nearby stray 'B9' token) but type was already correct"},
+    {"id": "SYM_002", "type": "Transformer", "coordinates": [610,100,647,155], "connections": ["SYM_001","SYM_004","SYM_007","SYM_012"], "note": "T1, wavy-winding style -- was Inductor pre-correction"},
+    {"id": "SYM_004", "type": "Capacitor",   "coordinates": [383,226,398,332], "connections": ["SYM_001","SYM_002","SYM_007","SYM_012"], "note": "C5 .001 -- already correct"},
+    {"id": "SYM_005", "type": "Resistor",    "coordinates": [292,155,344,191], "connections": ["B9","L4","MPSH11","R4","SYM_009","SYM_015"], "note": "R5 3.3K -- was Inductor pre-correction"},
+    {"id": "R4",      "type": "Resistor",    "coordinates": [290,115,332,147], "connections": ["B9","L4","MPSH11","SYM_005","SYM_009","SYM_015"], "note": "R4 6.2K -- already correct"},
+    {"id": "SYM_007", "type": "Switch",      "coordinates": [508,389,524,432], "connections": ["SYM_001","SYM_002","SYM_004","SYM_012"], "note": "S1 -- was Potentiometer pre-correction"},
+    {"id": "L4",      "type": "Inductor",    "coordinates": [429,387,515,423], "connections": ["B9","MPSH11","R4","SYM_005","SYM_009","SYM_015"], "note": "L4 50uH -- was Switch pre-correction (id itself was correctly OCR'd as L4, type wasn't)"},
+    {"id": "SYM_009", "type": "Resistor",    "coordinates": [183,41,217,66],   "connections": ["B9","L4","MPSH11","R4","SYM_005","SYM_015"], "note": "R1 10K -- already correct"},
+    {"id": "SYM_012", "type": "Capacitor",   "coordinates": [419,382,434,437], "connections": ["SYM_001","SYM_002","SYM_004","SYM_007"], "note": "C8 .001 -- was Battery pre-correction"},
+    {"id": "MPSH11",  "type": "Capacitor",   "coordinates": [512,133,561,151], "connections": ["B9","L4","R4","SYM_005","SYM_009","SYM_015"], "note": "a small capacitor near Q1 (likely C6, ~27pF) -- id is a mislabel from OCR proximity to the actual Q1/MPSH11 transistor's text, not this component; type was LED pre-correction"},
+    {"id": "SYM_013", "type": "Resistor",    "coordinates": [175,226,229,251], "connections": [], "note": "R3 20K -- was LED pre-correction"},
+    {"id": "SYM_015", "type": "Unknown",     "coordinates": [85,110,174,136],  "connections": ["B9","L4","MPSH11","R4","SYM_005","SYM_009"], "note": "part of the 'OSC/TIMER' IC block (an 8-pin DIP) -- no class in the current library fits a generic IC, so Unknown is correct here, same reasoning as D4's LOAD/Optocoupler before those classes existed. Was Potentiometer pre-correction."},
+    {"id": "SYM_016", "type": "Resistor",    "coordinates": [171,143,218,182], "connections": [], "note": "R2 53.6K -- was Inductor pre-correction"},
+    {"id": "Q1_estimated", "type": "BJT_NPN", "coordinates": [460,120,498,168], "connections": ["SYM_002"], "note": "Q1 MPSH11 -- MISSING from pipeline output entirely (false negative). Drawn without the usual circle outline (unlike D4's transistors), which may be exactly why it wasn't detected/classified as a BJT. Coordinates are a visual estimate, not pixel-verified."}
+  ],
+  "_excluded_false_positives": [
+    {"id": "SYM_001", "coordinates": [533,382,563,416], "reason": "part of the output bracket/arrow glyph feeding 'TO 6-15 VOLTS DS' -- a drawing annotation, not an electronic component"},
+    {"id": "SYM_003", "coordinates": [550,383,617,446], "reason": "same output bracket/arrow glyph as SYM_001, a different fragment of it"},
+    {"id": "SYM_011", "coordinates": [540,455,564,474], "reason": "same output bracket/arrow glyph, a third fragment"},
+    {"id": "SYM_010", "coordinates": [399,417,434,437], "reason": "duplicate detection of the same physical capacitor as SYM_012 (C8 .001) under a different candidate box -- a merge-threshold miss, same failure mode as D4's SYM_015/SYM_012 duplicate"}
+  ]
+}
